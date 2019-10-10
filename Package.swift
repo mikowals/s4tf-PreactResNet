@@ -12,7 +12,7 @@ let package = Package(
             targets: ["PreactResNet"]),
     ],
     dependencies: [
-        .package(path: "../LayersDataFormat"),
+        .package(url: "https://github.com/mikowals/s4tf-LayersDataFormat.git", .branch("master")),
     ],
     targets: [
         // Targets are the basic building blocks of a package. A target can define a module or a test suite.

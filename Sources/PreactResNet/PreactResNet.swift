@@ -20,9 +20,20 @@ extension Tensor where Scalar: TensorFlowFloatingPoint {
     }
 }
 
+func makeStrides(stride: Int, dataFormat: Raw.DataFormat) -> (Int, Int, Int, Int) {
+    let strides: (Int, Int, Int, Int)
+    switch dataFormat {
+    case .nchw:
+        strides = (1, 1, stride, stride)
+    case .nhwc:
+        strides = (1, stride, stride, 1)
+    }
+    return strides
+}
 struct WeightNormConv2D<Scalar: TensorFlowFloatingPoint>: Layer {
     var filter, g: Tensor<Scalar>
-    @noDerivative let stride: Int
+    @noDerivative var stride: Int = 1
+    @noDerivative var dataFormat: Raw.DataFormat = .nhwc
     /*var differentiableVectorView: TangentVector {
         get { TangentVector(filter: filter, g: g) }
         set { filter = newValue.filter; g = newValue.g }
@@ -30,9 +41,10 @@ struct WeightNormConv2D<Scalar: TensorFlowFloatingPoint>: Layer {
 
     @differentiable
     func callAsFunction(_ input: Tensor<Scalar>) -> Tensor<Scalar>{
-        return input.convolved2DDF(withFilter: filter * g, //filter.weightNormalized(g: g),
-                                    strides: (1, 1, stride, stride),
-                                    padding: .same, dataFormat: .nchw)
+        return input.convolved2DDF(withFilter: filter * g,
+                                   strides: makeStrides(stride: stride, dataFormat: dataFormat),
+                                   padding: .same,
+                                   dataFormat: dataFormat)
     }
     
     mutating func replaceParameters(_ newValue: TangentVector) {
@@ -63,6 +75,7 @@ struct WeightNormDense<Scalar: TensorFlowFloatingPoint>: Layer {
 struct PreactConv2D<Scalar: TensorFlowFloatingPoint>: Layer {
     var filter, bias1, bias2, g: Tensor<Scalar>
     @noDerivative let stride: Int
+    @noDerivative var dataFormat: Raw.DataFormat = .nhwc
     /*var differentiableVectorView: TangentVector {
         get { TangentVector(filter: filter, bias1: bias1, bias2: bias2, g: g) }
         set {
@@ -76,9 +89,10 @@ struct PreactConv2D<Scalar: TensorFlowFloatingPoint>: Layer {
     @differentiable
     func callAsFunction(_ input: Tensor<Scalar>) -> Tensor<Scalar> {
         let tmp = relu(input + bias1) + bias2
-        return tmp.convolved2DDF(withFilter: filter * g, //filter.weightNormalized(g: g),
-                                strides: (1, 1, stride, stride),
-                                padding: .same, dataFormat: Raw.DataFormat.nchw)
+        return tmp.convolved2DDF(withFilter: filter * g,
+                                 strides: makeStrides(stride: stride, dataFormat: dataFormat),
+                                 padding: .same,
+                                 dataFormat: dataFormat)
     }
     
     mutating func replaceParameters(_ newValue: TangentVector) {
@@ -92,18 +106,23 @@ struct PreactConv2D<Scalar: TensorFlowFloatingPoint>: Layer {
 struct Shortcut<Scalar: TensorFlowFloatingPoint>: Differentiable {
     @noDerivative let shortcutOp: @differentiable (Tensor<Scalar>) -> Tensor<Scalar>
     
-    init(stride: Int = 1, featureIncrease: Int = 0){
+    init(stride: Int = 1, featureIncrease: Int = 0, dataFormat: Raw.DataFormat = .nhwc) {
         if stride > 1 || featureIncrease != 0 {
+            let channelAxis = dataFormat == .nchw ? 1 : 3
+            var padding = [(before: 0, after: 0),
+                           (before: 0, after: 0),
+                           (before: 0, after: 0),
+                           (before: 0, after: 0)]
+            padding[channelAxis] = (before: 0, after: featureIncrease)
+            
             self.shortcutOp = {input in
-                          let tmp = input.averagePooledDF(kernelSize: (1,1,stride,stride),
-                                                   strides: (1,1,stride,stride),
-                                                   padding: .same,
-                                                   dataFormat: .nchw)
-                          return tmp.padded(forSizes: [(before: 0, after: 0),
-                                                       (before: 0, after: featureIncrease),
-                                                       (before: 0, after: 0),
-                                                       (before: 0, after: 0),])
-                          }
+                let strides = makeStrides(stride: stride, dataFormat: dataFormat)
+                let tmp = input.averagePooledDF(kernelSize: strides,
+                                                strides: strides,
+                                                padding: .same,
+                                                dataFormat: dataFormat)
+                return tmp.padded(forSizes: padding)
+                }
         } else {
             self.shortcutOp = identity
         }
@@ -119,9 +138,6 @@ struct PreactResidualBlock<Scalar: TensorFlowFloatingPoint>: Layer {
     @noDerivative let stride: Int
     @noDerivative let featureIn: Int
     @noDerivative let featureOut: Int
-    @noDerivative var dataFormat: Raw.DataFormat = .nchw
-    @noDerivative let isExpansion: Bool
-    //var shortcut: WeightNormConv2D<Scalar>
     @noDerivative let shortcut: Shortcut<Scalar>
     var conv1: PreactConv2D<Scalar>
     var conv2: PreactConv2D<Scalar>
@@ -146,45 +162,34 @@ struct PreactResidualBlock<Scalar: TensorFlowFloatingPoint>: Layer {
         featureIn: Int,
         featureOut: Int,
         kernelSize: Int = 3,
-        stride: Int = 1
+        stride: Int = 1,
+        dataFormat: Raw.DataFormat = .nhwc
     ) {
-        let padding = kernelSize == 3 ? Padding.same : Padding.valid
         self.stride = stride
         self.featureIn = featureIn
         self.featureOut = featureOut
-        //let shortcutType = stride == 2 ? ShortcutType.pooling :  ShortcutType.id
-        /*
-        self.shortcut = WeightNormConv2D(filter: Tensor(orthogonal: [1,1,featureIn, featureOut]),
-                                         g: Tensor(ones: [featureOut]) * sqrt(Scalar(featureIn) / Scalar(featureOut)),
-                                         stride: stride)
-        */
-        self.shortcut = Shortcut(stride: stride,
-                            featureIncrease: featureOut - featureIn)
-        self.isExpansion = featureIn != featureOut || stride != 1
+        self.shortcut = Shortcut(stride: stride, featureIncrease: featureOut - featureIn)
         self.conv1 = PreactConv2D(
             filter: Tensor(orthogonal: [kernelSize, kernelSize, featureIn, featureOut]),
             bias1: Tensor(zeros: [1,1,1,1]),
             bias2: Tensor(zeros: [1,1,1,1]),
             g: Tensor(ones: [featureOut]) * sqrt(Scalar(2 * featureIn) / Scalar(featureOut)),
-            stride: stride)
+            stride: stride,
+            dataFormat: dataFormat
+        )
         self.conv2 = PreactConv2D(
             filter: Tensor(orthogonal: [kernelSize, kernelSize, featureOut, featureOut]),
             bias1: Tensor(zeros: [1,1,1,1]),
             bias2: Tensor(zeros: [1,1,1,1]),
             g: Tensor(ones: [featureOut]) * rsqrt(Tensor<Scalar>(5)),
-            stride: 1)
+            stride: 1,
+            dataFormat: dataFormat
+        )
     }
 
     @differentiable
     func callAsFunction(_ input: Tensor<Scalar>) -> Tensor<Scalar> {
-        //print("in: ", input.standardDeviation())
         let tmp = conv2(conv1(input))
-        /*let sc: Tensor<Scalar>
-        if isExpansion {
-            sc = shortcut(input)
-        } else {
-            sc = input
-        }*/
         let sc = shortcut(input)
         return tmp * multiplier + bias + sc
     }
@@ -198,6 +203,7 @@ struct PreactResidualBlock<Scalar: TensorFlowFloatingPoint>: Layer {
 }
 
 public struct PreactResNet<Scalar: TensorFlowFloatingPoint>: Layer {
+    @noDerivative var dataFormat: Raw.DataFormat = .nhwc
     var multiplier1 = Tensor<Scalar>(ones: [1,1,1,1])
     var bias1 = Tensor<Scalar>(zeros: [1,1,1,1])
     var conv1: WeightNormConv2D<Scalar>
@@ -226,7 +232,8 @@ public struct PreactResNet<Scalar: TensorFlowFloatingPoint>: Layer {
             }
     }*/
 
-    public init() {
+    public init(dataFormat: Raw.DataFormat = .nhwc) {
+        self.dataFormat = dataFormat
         let depth = 16
         let depth2 = 64
         let depth3 = 128
@@ -236,23 +243,49 @@ public struct PreactResNet<Scalar: TensorFlowFloatingPoint>: Layer {
         self.conv1 = WeightNormConv2D(
             filter: Tensor(orthogonal: [3, 3, 3, depth]),
             g: Tensor(ones: [depth]) * sqrt(Scalar(2 * 3) / Scalar(depth)),
-            stride: 1)
+            stride: 1,
+            dataFormat: dataFormat
+        )
         
-        self.blocks = [PreactResidualBlock(featureIn: depth, featureOut: depth2, kernelSize: 3, stride: 1)]
+        self.blocks = [PreactResidualBlock(featureIn: depth,
+                                           featureOut: depth2,
+                                           kernelSize: 3,
+                                           stride: 1,
+                                           dataFormat: dataFormat)]
         for _ in 1 ..< resUnitPerBlock {
-            self.blocks += [PreactResidualBlock(featureIn: depth2, featureOut: depth2, kernelSize: 3, stride: 1)]
+            self.blocks += [PreactResidualBlock(featureIn: depth2,
+                                                featureOut: depth2,
+                                                kernelSize: 3,
+                                                stride: 1,
+                                                dataFormat: dataFormat)]
         }
-        self.blocks += [PreactResidualBlock(featureIn: depth2, featureOut: depth3, kernelSize: 3, stride: 2)]
+        self.blocks += [PreactResidualBlock(featureIn: depth2,
+                                            featureOut: depth3,
+                                            kernelSize: 3,
+                                            stride: 2,
+                                            dataFormat: dataFormat)]
         for _ in 1 ..< resUnitPerBlock {
-            self.blocks += [PreactResidualBlock(featureIn: depth3, featureOut: depth3, kernelSize: 3, stride: 1)]
+            self.blocks += [PreactResidualBlock(featureIn: depth3,
+                                                featureOut: depth3,
+                                                kernelSize: 3,
+                                                stride: 1,
+                                                dataFormat: dataFormat)]
         }
-        self.blocks += [PreactResidualBlock(featureIn: depth3, featureOut: depth4, kernelSize: 3, stride: 2)]
+        self.blocks += [PreactResidualBlock(featureIn: depth3,
+                                            featureOut: depth4,
+                                            kernelSize: 3,
+                                            stride: 2,
+                                            dataFormat: dataFormat)]
         for _ in 1 ..< resUnitPerBlock {
-            self.blocks += [PreactResidualBlock(featureIn: depth4, featureOut: depth4, kernelSize: 3, stride: 1)]
+            self.blocks += [PreactResidualBlock(featureIn: depth4,
+                                                featureOut: depth4,
+                                                kernelSize: 3,
+                                                stride: 1,
+                                                dataFormat: dataFormat)]
         }
         self.dense1 = WeightNormDense(weight: Tensor(orthogonal: [depth4, 10]),
                                       bias: Tensor(zeros: [1,1]),
-                                      g: Tensor(zeros: [10])) //* sqrt(Scalar(depth4) / Scalar(10)))
+                                      g: Tensor(zeros: [10]))
         
         self.projectUnitNorm()
     }
@@ -262,7 +295,8 @@ public struct PreactResNet<Scalar: TensorFlowFloatingPoint>: Layer {
         var tmp = conv1(input) * multiplier1 + bias1
         tmp = blocks.differentiableReduce(tmp) {last, layer in layer(last)}
         tmp = relu(tmp * multiplier2 + bias2)
-        tmp = tmp.mean(squeezingAxes: [2,3])
+        let squeezingAxes = dataFormat == .nchw ? [2, 3] : [1, 2]
+        tmp = tmp.mean(squeezingAxes: squeezingAxes)
         tmp = dense1(tmp)
         //print(tmp.standardDeviation())
         return tmp

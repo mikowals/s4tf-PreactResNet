@@ -5,7 +5,7 @@ import TensorFlow
 
 final class PreactResNetTests: XCTestCase {
     func testGetSetParameters() {
-        var model = PreactResNet<Float>()
+        var model = PreactResNet<Float>(dataFormat: Raw.DataFormat.nhwc)
         var parameters = model.differentiableVectorView
         var count = 0
         for kp in parameters.recursivelyAllWritableKeyPaths(to: Tensor<Float>.self) {
