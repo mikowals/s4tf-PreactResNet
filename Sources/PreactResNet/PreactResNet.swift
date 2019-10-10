@@ -107,6 +107,7 @@ struct Shortcut<Scalar: TensorFlowFloatingPoint>: Differentiable {
     @noDerivative let shortcutOp: @differentiable (Tensor<Scalar>) -> Tensor<Scalar>
     
     init(stride: Int = 1, featureIncrease: Int = 0, dataFormat: Raw.DataFormat = .nhwc) {
+        print("shortcut: ", dataFormat)
         if stride > 1 || featureIncrease != 0 {
             let channelAxis = dataFormat == .nchw ? 1 : 3
             var padding = [(before: 0, after: 0),
@@ -165,6 +166,7 @@ struct PreactResidualBlock<Scalar: TensorFlowFloatingPoint>: Layer {
         stride: Int = 1,
         dataFormat: Raw.DataFormat = .nhwc
     ) {
+        print("block: ", dataFormat)
         self.stride = stride
         self.featureIn = featureIn
         self.featureOut = featureOut
@@ -191,6 +193,7 @@ struct PreactResidualBlock<Scalar: TensorFlowFloatingPoint>: Layer {
     func callAsFunction(_ input: Tensor<Scalar>) -> Tensor<Scalar> {
         let tmp = conv2(conv1(input))
         let sc = shortcut(input)
+        print("block shape: ", tmp.shape, sc.shape)
         return tmp * multiplier + bias + sc
     }
     
@@ -239,7 +242,7 @@ public struct PreactResNet<Scalar: TensorFlowFloatingPoint>: Layer {
         let depth3 = 128
         let depth4 = 256
         let resUnitPerBlock = 5
-
+        print("resnet: ", dataFormat)
         self.conv1 = WeightNormConv2D(
             filter: Tensor(orthogonal: [3, 3, 3, depth]),
             g: Tensor(ones: [depth]) * sqrt(Scalar(2 * 3) / Scalar(depth)),
