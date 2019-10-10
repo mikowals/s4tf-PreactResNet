@@ -302,7 +302,7 @@ public struct PreactResNet<Scalar: TensorFlowFloatingPoint>: Layer {
         return tmp
     }
     
-    mutating func replaceParameters(_ newValue: TangentVector) {
+    public mutating func replaceParameters(_ newValue: TangentVector) {
         multiplier1 = newValue.multiplier1
         conv1.replaceParameters(newValue.conv1)
         bias1 = newValue.bias1
@@ -313,7 +313,7 @@ public struct PreactResNet<Scalar: TensorFlowFloatingPoint>: Layer {
         bias2 = newValue.bias2
         dense1.replaceParameters(newValue.dense1)
     }
-    mutating func projectUnitNorm() {
+    public mutating func projectUnitNorm() {
         conv1.filter = conv1.filter.weightNormalized()
         for ii in 0 ..< blocks.count {
             //blocks[ii].shortcut.filter = blocks[ii].shortcut.filter.weightNormalized()
