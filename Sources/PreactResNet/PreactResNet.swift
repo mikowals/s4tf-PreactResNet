@@ -16,7 +16,7 @@ extension Tensor where Scalar: TensorFlowFloatingPoint {
     func weightNormalized() -> Tensor<Scalar> {
         let axes = Array<Int>(shape.indices.dropLast())
         let centered = self - self.mean(alongAxes: axes)
-        return centered / centered.l2Norm(alongAxes: axes)
+        return centered / (centered.l2Norm(alongAxes: axes))
     }
 }
 
@@ -31,14 +31,31 @@ func makeStrides(stride: Int, dataFormat: Raw.DataFormat) -> (Int, Int, Int, Int
     return strides
 }
 struct WeightNormConv2D<Scalar: TensorFlowFloatingPoint>: Layer {
-    var filter, g: Tensor<Scalar>
+    var filter: Tensor<Scalar> {
+        didSet { filter = filter.weightNormalized() }
+    }
+
+    var g: Tensor<Scalar>
     @noDerivative var stride: Int = 1
     @noDerivative var dataFormat: Raw.DataFormat = .nhwc
     /*var differentiableVectorView: TangentVector {
         get { TangentVector(filter: filter, g: g) }
         set { filter = newValue.filter; g = newValue.g }
     }*/
-
+    init(filter: Tensor<Scalar>,
+         g: Tensor<Scalar>,
+         stride: Int = 1,
+         dataFormat: Raw.DataFormat = .nhwc)
+    {
+        self.filter = filter
+        self.g = g
+        self.stride = stride
+        self.dataFormat = dataFormat
+        defer {
+            self.filter = self.filter
+        }
+    }
+    
     @differentiable
     func callAsFunction(_ input: Tensor<Scalar>) -> Tensor<Scalar>{
         return input.convolved2DDF(withFilter: filter * g,
@@ -54,11 +71,22 @@ struct WeightNormConv2D<Scalar: TensorFlowFloatingPoint>: Layer {
 }
 
 struct WeightNormDense<Scalar: TensorFlowFloatingPoint>: Layer {
-    var weight, bias, g: Tensor<Scalar>
+    var weight: Tensor<Scalar> {
+        didSet { weight = weight.weightNormalized() }
+    }
+    var bias, g: Tensor<Scalar>
     /*var differentiableVectorView: TangentVector {
         get { TangentVector(weight: weight, bias: bias, g: g) }
         set { weight = newValue.weight; bias = newValue.bias; g = newValue.g }
     }*/
+    init(weight: Tensor<Scalar>, bias: Tensor<Scalar>, g: Tensor<Scalar>) {
+        self.weight = weight
+        self.bias = bias
+        self.g = g
+        defer {
+            self.weight = self.weight
+        }
+    }
 
     @differentiable
     func callAsFunction(_ input: Tensor<Scalar>) -> Tensor<Scalar> {
@@ -73,7 +101,11 @@ struct WeightNormDense<Scalar: TensorFlowFloatingPoint>: Layer {
 }
 
 struct PreactConv2D<Scalar: TensorFlowFloatingPoint>: Layer {
-    var filter, bias1, bias2, g: Tensor<Scalar>
+    var filter: Tensor<Scalar> {
+        didSet { filter = filter.weightNormalized() }
+    }
+
+    var bias1, bias2, g: Tensor<Scalar>
     @noDerivative let stride: Int
     @noDerivative var dataFormat: Raw.DataFormat = .nhwc
     /*var differentiableVectorView: TangentVector {
@@ -85,6 +117,23 @@ struct PreactConv2D<Scalar: TensorFlowFloatingPoint>: Layer {
             g = newValue.g
         }
     }*/
+    init(filter: Tensor<Scalar>,
+         bias1: Tensor<Scalar>,
+         bias2: Tensor<Scalar>,
+         g: Tensor<Scalar>,
+         stride: Int = 1,
+         dataFormat: Raw.DataFormat = .nhwc)
+    {
+        self.filter = filter
+        self.bias1 = bias1
+        self.bias2 = bias2
+        self.g = g
+        self.stride = stride
+        self.dataFormat = dataFormat
+        defer {
+            self.filter = filter
+        }
+    }
 
     @differentiable
     func callAsFunction(_ input: Tensor<Scalar>) -> Tensor<Scalar> {
@@ -288,7 +337,7 @@ public struct PreactResNet<Scalar: TensorFlowFloatingPoint>: Layer {
                                       bias: Tensor(zeros: [1,1]),
                                       g: Tensor(zeros: [10]))
         
-        self.projectUnitNorm()
+        //self.projectUnitNorm()
     }
 
     @differentiable
