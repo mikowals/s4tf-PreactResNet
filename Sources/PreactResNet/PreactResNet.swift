@@ -1,6 +1,11 @@
 import TensorFlow
 import LayersDataFormat
 
+@differentiable
+func mish<Scalar: TensorFlowFloatingPoint>(_ input: Tensor<Scalar>) -> Tensor<Scalar> {
+    return input * tanh(softplus(input))
+}
+
 extension Tensor where Scalar: TensorFlowFloatingPoint {
     @differentiable
     func l2Loss() -> Tensor<Scalar> {
@@ -30,6 +35,7 @@ func makeStrides(stride: Int, dataFormat: Raw.DataFormat) -> (Int, Int, Int, Int
     }
     return strides
 }
+
 struct WeightNormConv2D<Scalar: TensorFlowFloatingPoint>: Layer {
     var filter: Tensor<Scalar> {
         didSet { filter = filter.weightNormalized() }
@@ -137,7 +143,7 @@ struct PreactConv2D<Scalar: TensorFlowFloatingPoint>: Layer {
 
     @differentiable
     func callAsFunction(_ input: Tensor<Scalar>) -> Tensor<Scalar> {
-        let tmp = relu(input + bias1) + bias2
+        let tmp = mish(input + bias1) + bias2
         return tmp.convolved2DDF(withFilter: filter * g,
                                  strides: makeStrides(stride: stride, dataFormat: dataFormat),
                                  padding: .same,
@@ -344,7 +350,7 @@ public struct PreactResNet<Scalar: TensorFlowFloatingPoint>: Layer {
     public func callAsFunction(_ input: Tensor<Scalar>) -> Tensor<Scalar>{
         var tmp = conv1(input) * multiplier1 + bias1
         tmp = blocks.differentiableReduce(tmp) {last, layer in layer(last)}
-        tmp = relu(tmp * multiplier2 + bias2)
+        tmp = mish(tmp * multiplier2 + bias2)
         let squeezingAxes = dataFormat == .nchw ? [2, 3] : [1, 2]
         tmp = tmp.mean(squeezingAxes: squeezingAxes)
         tmp = dense1(tmp)
@@ -363,6 +369,7 @@ public struct PreactResNet<Scalar: TensorFlowFloatingPoint>: Layer {
         bias2 = newValue.bias2
         dense1.replaceParameters(newValue.dense1)
     }
+    // No longer used as filters and weights use didSet to maintain normalized weights.
     public mutating func projectUnitNorm() {
         conv1.filter = conv1.filter.weightNormalized()
         for ii in 0 ..< blocks.count {
