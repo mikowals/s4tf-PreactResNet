@@ -36,6 +36,24 @@ func makeStrides(stride: Int, dataFormat: Raw.DataFormat) -> (Int, Int, Int, Int
     return strides
 }
 
+@differentiable
+func upsample(_ input: Tensor<Scalar>, dataFormat: Raw.DataFormat = .nhwc) -> Tensor<Scalar> {
+    let shape = input.shape
+    let batchSize, height, width, channels: Int
+    let scaleOnes, upsampling: Tensor<Scalar>
+    if dataFormat == .nchw {
+        (batchSize, height, width, channels) = (shape[0], shape[2], shape[3], shape[1])
+        scaleOnes = Tensor<Scalar>(ones: [1, 1, 1, 2, 1, 2])
+        upSampling = input.reshaped(to: [batchSize, height, width, 1, channels, 1]) * scaleOnes
+        return upSampling.reshaped(to: [batchSize, channels, height * 2, width * 2])
+    }
+    
+    (batchSize, height, width, channels) = (shape[0], shape[1], shape[2], shape[3])
+    scaleOnes = Tensor<Scalar>(ones: [1, 1, 2, 1, 2, 1])
+    upSampling = input.reshaped(to: [batchSize, height, 1, width, 1, channels]) * scaleOnes
+    return upSampling.reshaped(to: [batchSize, height * 2, width * 2, channels])
+}
+
 struct WeightNormConv2D<Scalar: TensorFlowFloatingPoint>: Layer {
     var filter: Tensor<Scalar> {
         didSet { filter = filter.weightNormalized() }
@@ -363,7 +381,7 @@ public struct PreactResNet<Scalar: TensorFlowFloatingPoint>: Layer {
         }
         self.dense1 = WeightNormDense(weight: Tensor(orthogonal: [depth4, 10]),
                                       bias: Tensor(zeros: [1,1]),
-                                      g: Tensor(zeros: [10]))
+                                      g: Tensor(ones: [10]))
         
         //self.projectUnitNorm()
     }
