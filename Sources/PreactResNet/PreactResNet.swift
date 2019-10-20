@@ -363,7 +363,7 @@ public struct PreactResNet<Scalar: TensorFlowFloatingPoint>: Layer {
         }
         self.dense1 = WeightNormDense(weight: Tensor(orthogonal: [depth4, 10]),
                                       bias: Tensor(zeros: [1,1]),
-                                      g: Tensor(repeating: 0.5, shape: [10]))
+                                      g: Tensor(repeating: 1.0, shape: [10]))
         
         //self.projectUnitNorm()
     }
