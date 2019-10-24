@@ -44,10 +44,7 @@ struct WeightNormConv2D<Scalar: TensorFlowFloatingPoint>: Layer {
     var g: Tensor<Scalar>
     @noDerivative var stride: Int = 1
     @noDerivative var dataFormat: Raw.DataFormat = .nhwc
-    /*var differentiableVectorView: TangentVector {
-        get { TangentVector(filter: filter, g: g) }
-        set { filter = newValue.filter; g = newValue.g }
-    }*/
+
     init(filter: Tensor<Scalar>,
          g: Tensor<Scalar>,
          stride: Int = 1,
@@ -81,10 +78,7 @@ struct WeightNormDense<Scalar: TensorFlowFloatingPoint>: Layer {
         didSet { weight = weight.weightNormalized() }
     }
     var bias, g: Tensor<Scalar>
-    /*var differentiableVectorView: TangentVector {
-        get { TangentVector(weight: weight, bias: bias, g: g) }
-        set { weight = newValue.weight; bias = newValue.bias; g = newValue.g }
-    }*/
+    
     init(weight: Tensor<Scalar>, bias: Tensor<Scalar>, g: Tensor<Scalar>) {
         self.weight = weight
         self.bias = bias
@@ -116,15 +110,7 @@ struct PreactConv2D<Scalar: TensorFlowFloatingPoint>: Layer {
     @noDerivative var dataFormat: Raw.DataFormat = .nhwc
     @noDerivative let activation: Activation
     public typealias Activation = @differentiable (Tensor<Scalar>) -> Tensor<Scalar>
-    /*var differentiableVectorView: TangentVector {
-        get { TangentVector(filter: filter, bias1: bias1, bias2: bias2, g: g) }
-        set {
-            filter = newValue.filter
-            bias1 = newValue.bias1
-            bias2 = newValue.bias2
-            g = newValue.g
-        }
-    }*/
+
     init(filter: Tensor<Scalar>,
          bias1: Tensor<Scalar>,
          bias2: Tensor<Scalar>,
@@ -204,20 +190,6 @@ struct PreactResidualBlock<Scalar: TensorFlowFloatingPoint>: Layer {
     var bias = Tensor<Scalar>(zeros: [1,1,1,1])
     
     public typealias Activation = @differentiable (Tensor<Scalar>) -> Tensor<Scalar>
-    /*var differentiableVectorView: TangentVector {
-        get { TangentVector(//shortcut: shortcut.differentiableVectorView,
-                            conv1: conv1.differentiableVectorView,
-                            conv2: conv2.differentiableVectorView,
-                            multiplier: multiplier,
-                            bias: bias)
-            }
-        set { //shortcut.differentiableVectorView = newValue.shortcut
-              conv1.differentiableVectorView = newValue.conv1
-              conv2.differentiableVectorView = newValue.conv2
-              multiplier = newValue.multiplier
-              bias = newValue.bias
-            }
-    }*/
 
     public init(
         featureIn: Int,
@@ -280,26 +252,6 @@ public struct PreactResNet<Scalar: TensorFlowFloatingPoint>: Layer {
     var dense1: WeightNormDense<Scalar>
     
     public typealias Activation = @differentiable (Tensor<Scalar>) -> Tensor<Scalar>
-    /*public var differentiableVectorView: TangentVector {
-        get { TangentVector(multiplier1: multiplier1,
-                            bias1: bias1,
-                            conv1: conv1.differentiableVectorView,
-                            blocks: blocks.differentiableVectorView,
-                            multiplier2: multiplier2,
-                            bias2: bias2,
-                            dense1: dense1.differentiableVectorView)
-            }
-        set { multiplier1 = newValue.multiplier1
-              conv1.differentiableVectorView = newValue.conv1
-              bias1 = newValue.bias1
-              for ii in 0..<blocks.count {
-                  blocks[ii].differentiableVectorView = newValue.blocks[ii]
-              }
-              multiplier2 = newValue.multiplier2
-              bias2 = newValue.bias2
-              dense1.differentiableVectorView = newValue.dense1
-            }
-    }*/
 
     public init(
         activation: @escaping Activation = relu,
@@ -312,6 +264,12 @@ public struct PreactResNet<Scalar: TensorFlowFloatingPoint>: Layer {
         let depth3 = 128
         let depth4 = 256
         let resUnitPerBlock = 5
+        let blockSpecs = [
+            (depthIn: depth, depthOut: depth2, stride: 1),
+            (depthIn: depth2, depthOut: depth3, stride: 2),
+            (depthIn: depth3, depthOut: depth4, stride: 2)
+        ]
+        
         self.conv1 = WeightNormConv2D(
             filter: Tensor(orthogonal: [3, 3, 3, depth]),
             g: Tensor(ones: [depth]) * sqrt(Scalar(2 * 3) / Scalar(depth)),
@@ -319,53 +277,29 @@ public struct PreactResNet<Scalar: TensorFlowFloatingPoint>: Layer {
             dataFormat: dataFormat
         )
         
-        self.blocks = [PreactResidualBlock(featureIn: depth,
-                                           featureOut: depth2,
-                                           kernelSize: 3,
-                                           stride: 1,
-                                           activation: activation,
-                                           dataFormat: dataFormat)]
-        for _ in 1 ..< resUnitPerBlock {
-            self.blocks += [PreactResidualBlock(featureIn: depth2,
-                                                featureOut: depth2,
+        self.blocks = []
+        for s in blockSpecs {
+            self.blocks += [PreactResidualBlock(featureIn: s.depthIn,
+                                                featureOut: s.depthOut,
                                                 kernelSize: 3,
-                                                stride: 1,
+                                                stride: s.stride,
                                                 activation: activation,
                                                 dataFormat: dataFormat)]
+            for _ in 1 ..< resUnitPerBlock {
+                self.blocks += [PreactResidualBlock(featureIn: s.depthOut,
+                                                    featureOut: s.depthOut,
+                                                    kernelSize: 3,
+                                                    stride: 1,
+                                                    activation: activation,
+                                                    dataFormat: dataFormat)]
+            }
+            
         }
-        self.blocks += [PreactResidualBlock(featureIn: depth2,
-                                            featureOut: depth3,
-                                            kernelSize: 3,
-                                            stride: 2,
-                                            activation: activation,
-                                            dataFormat: dataFormat)]
-        for _ in 1 ..< resUnitPerBlock {
-            self.blocks += [PreactResidualBlock(featureIn: depth3,
-                                                featureOut: depth3,
-                                                kernelSize: 3,
-                                                stride: 1,
-                                                activation: activation,
-                                                dataFormat: dataFormat)]
-        }
-        self.blocks += [PreactResidualBlock(featureIn: depth3,
-                                            featureOut: depth4,
-                                            kernelSize: 3,
-                                            stride: 2,
-                                            activation: activation,
-                                            dataFormat: dataFormat)]
-        for _ in 1 ..< resUnitPerBlock {
-            self.blocks += [PreactResidualBlock(featureIn: depth4,
-                                                featureOut: depth4,
-                                                kernelSize: 3,
-                                                stride: 1,
-                                                activation: activation,
-                                                dataFormat: dataFormat)]
-        }
+        
         self.dense1 = WeightNormDense(weight: Tensor(orthogonal: [depth4, 10]),
                                       bias: Tensor(zeros: [1,1]),
-                                      g: Tensor(repeating: 0.8, shape: [10]))
+                                      g: Tensor(repeating: 0.0, shape: [10]))
         
-        //self.projectUnitNorm()
     }
 
     @differentiable
@@ -375,9 +309,7 @@ public struct PreactResNet<Scalar: TensorFlowFloatingPoint>: Layer {
         tmp = activation(tmp * multiplier2 + bias2)
         let squeezingAxes = dataFormat == .nchw ? [2, 3] : [1, 2]
         tmp = tmp.mean(squeezingAxes: squeezingAxes)
-        tmp = dense1(tmp)
-        //print(tmp.standardDeviation())
-        return tmp
+        return dense1(tmp)
     }
     
     public mutating func replaceParameters(_ newValue: TangentVector) {
