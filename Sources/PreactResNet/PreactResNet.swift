@@ -36,7 +36,7 @@ func makeStrides(stride: Int, dataFormat: Raw.DataFormat) -> (Int, Int, Int, Int
     return strides
 }
 
-struct WeightNormConv2D<Scalar: TensorFlowFloatingPoint>: Layer {
+public struct WeightNormConv2D<Scalar: TensorFlowFloatingPoint>: Layer {
     var filter: Tensor<Scalar> {
         didSet { filter = filter.weightNormalized() }
     }
@@ -73,7 +73,7 @@ struct WeightNormConv2D<Scalar: TensorFlowFloatingPoint>: Layer {
     }
 }
 
-struct WeightNormDense<Scalar: TensorFlowFloatingPoint>: Layer {
+public struct WeightNormDense<Scalar: TensorFlowFloatingPoint>: Layer {
     var weight: Tensor<Scalar> {
         didSet { weight = weight.weightNormalized() }
     }
