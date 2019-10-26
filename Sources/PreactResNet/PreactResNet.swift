@@ -60,7 +60,7 @@ public struct WeightNormConv2D<Scalar: TensorFlowFloatingPoint>: Layer {
     }
     
     @differentiable
-    func callAsFunction(_ input: Tensor<Scalar>) -> Tensor<Scalar>{
+    public func callAsFunction(_ input: Tensor<Scalar>) -> Tensor<Scalar>{
         return input.convolved2DDF(withFilter: filter * g,
                                    strides: makeStrides(stride: stride, dataFormat: dataFormat),
                                    padding: .same,
@@ -89,7 +89,7 @@ public struct WeightNormDense<Scalar: TensorFlowFloatingPoint>: Layer {
     }
 
     @differentiable
-    func callAsFunction(_ input: Tensor<Scalar>) -> Tensor<Scalar> {
+    public func callAsFunction(_ input: Tensor<Scalar>) -> Tensor<Scalar> {
         return matmul(input + bias, weight * g) //weight.weightNormalized(g: g))
     }
     
