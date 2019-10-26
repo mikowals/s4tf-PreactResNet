@@ -5,7 +5,7 @@ import TensorFlow
 
 final class PreactResNetTests: XCTestCase {
     func testGetSetParameters() {
-        var model = PreactResNet<Float>(dataFormat: Raw.DataFormat.nhwc)
+        var model = PreactResNet<Float>(dataFormat: Raw.DataFormat.nhwc, denseG: 0)
         var parameters = model.differentiableVectorView
         let originalParameters = parameters
         var count = 0

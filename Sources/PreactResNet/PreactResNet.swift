@@ -243,11 +243,11 @@ struct PreactResidualBlock<Scalar: TensorFlowFloatingPoint>: Layer {
 public struct PreactResNet<Scalar: TensorFlowFloatingPoint>: Layer {
     @noDerivative var dataFormat: Raw.DataFormat = .nhwc
     @noDerivative let activation: Activation
-    @noDerivative let denseG: Scalar
+    @noDerivative let denseG: Float
     var multiplier1 = Tensor<Scalar>(ones: [1,1,1,1])
     var bias1 = Tensor<Scalar>(zeros: [1,1,1,1])
     var conv1: WeightNormConv2D<Scalar>
-    var blocks: [PreactResidualBlock<Scalar>]
+    var blocks: [PreactResidualBlock<Scalar>] = []
     var multiplier2 = Tensor<Scalar>(ones: [1,1,1,1])
     var bias2 = Tensor<Scalar>(zeros: [1,1,1,1])
     var dense1: WeightNormDense<Scalar>
@@ -257,11 +257,11 @@ public struct PreactResNet<Scalar: TensorFlowFloatingPoint>: Layer {
     public init(
         activation: @escaping Activation = relu,
         dataFormat: Raw.DataFormat = .nhwc,
-        denseG: Scalar = 0
+        denseG: Float = 0
     ) {
         self.activation = activation
         self.dataFormat = dataFormat
-        self.denseG=denseG
+        self.denseG = denseG
         let depth = 16
         let depth2 = 64
         let depth3 = 128
@@ -280,7 +280,6 @@ public struct PreactResNet<Scalar: TensorFlowFloatingPoint>: Layer {
             dataFormat: dataFormat
         )
         
-        self.blocks = []
         for s in blockSpecs {
             self.blocks += [PreactResidualBlock(featureIn: s.depthIn,
                                                 featureOut: s.depthOut,
@@ -301,7 +300,7 @@ public struct PreactResNet<Scalar: TensorFlowFloatingPoint>: Layer {
         
         self.dense1 = WeightNormDense(weight: Tensor(orthogonal: [depth4, 10]),
                                       bias: Tensor(zeros: [1,1]),
-                                      g: Tensor(repeating: denseG, shape: [10]))
+                                      g: Tensor(repeating: Scalar(denseG), shape: [10]))
         
     }
 
