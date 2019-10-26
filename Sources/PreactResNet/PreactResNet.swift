@@ -45,7 +45,7 @@ public struct WeightNormConv2D<Scalar: TensorFlowFloatingPoint>: Layer {
     @noDerivative var stride: Int = 1
     @noDerivative var dataFormat: Raw.DataFormat = .nhwc
 
-    init(filter: Tensor<Scalar>,
+    public init(filter: Tensor<Scalar>,
          g: Tensor<Scalar>,
          stride: Int = 1,
          dataFormat: Raw.DataFormat = .nhwc)
@@ -79,7 +79,7 @@ public struct WeightNormDense<Scalar: TensorFlowFloatingPoint>: Layer {
     }
     var bias, g: Tensor<Scalar>
     
-    init(weight: Tensor<Scalar>, bias: Tensor<Scalar>, g: Tensor<Scalar>) {
+    public init(weight: Tensor<Scalar>, bias: Tensor<Scalar>, g: Tensor<Scalar>) {
         self.weight = weight
         self.bias = bias
         self.g = g
