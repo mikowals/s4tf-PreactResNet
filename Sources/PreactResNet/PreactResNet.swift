@@ -7,9 +7,20 @@ func mish<Scalar: TensorFlowFloatingPoint>(_ input: Tensor<Scalar>) -> Tensor<Sc
 }
 
 extension Tensor where Scalar: TensorFlowFloatingPoint {
+    public init(channelWiseZeroMean shape: TensorShape){
+        self.init(randomUniform: shape, lowerBound: Tensor<Scalar>(-1), upperBound: Tensor<Scalar>(1))
+        self = self - self.mean(alongAxes: [0, 1])
+        self = self / self.l2Norm(alongAxes: [0, 1, 2])
+    }
+    
     @differentiable
     func l2Loss() -> Tensor<Scalar> {
         return squared().sum()
+    }
+    
+    @differentiable
+    func l2UnitLoss() -> Tensor<Scalar> {
+        return (TensorFlow.sqrt(l2Loss()) - Scalar(1)).squared()
     }
     
     @differentiable(wrt: self)
@@ -25,7 +36,7 @@ extension Tensor where Scalar: TensorFlowFloatingPoint {
     }
 }
 
-func makeStrides(stride: Int, dataFormat: Raw.DataFormat) -> (Int, Int, Int, Int) {
+func makeStrides(stride: Int, dataFormat: _Raw.DataFormat) -> (Int, Int, Int, Int) {
     let strides: (Int, Int, Int, Int)
     switch dataFormat {
     case .nchw:
@@ -36,6 +47,56 @@ func makeStrides(stride: Int, dataFormat: Raw.DataFormat) -> (Int, Int, Int, Int
     return strides
 }
 
+public struct ReparameterizedConv2D<Scalar: TensorFlowFloatingPoint>: Layer {
+    public var filter, g: Tensor<Scalar>
+    @noDerivative var stride: Int = 1
+    @noDerivative var dataFormat: _Raw.DataFormat = .nhwc
+    
+    public init(filterShape: TensorShape, stride: Int = 1, dataFormat: _Raw.DataFormat = .nhwc) {
+        self.filter = Tensor<Scalar>(channelWiseZeroMean: filterShape)
+        self.g = Tensor<Scalar>(repeating: Scalar(TensorFlow.log(0.5)), shape: [filterShape[3]])
+        self.stride = stride
+        self.dataFormat = dataFormat
+    }
+    
+    @differentiable
+    public func callAsFunction(_ input: Tensor<Scalar>) -> Tensor<Scalar> {
+        /*let reparameterizedFilter = filter.withDerivative({ (v: inout Tensor<Scalar>) in
+              v = v - v.mean(alongAxes: [0, 1]) * Scalar(0.85)
+          }
+        ) * TensorFlow.exp(g) */
+        return input.convolved2DDF(
+            withFilter: filter * TensorFlow.exp(g),
+                        strides: makeStrides(stride: stride, dataFormat: dataFormat),
+                        padding: .same,
+                        dataFormat: dataFormat)
+    }
+}
+
+public struct FilterResponseNormalization<Scalar: TensorFlowFloatingPoint>: Layer {
+    var tau, gamma, beta, epsilon: Tensor<Scalar>
+    @noDerivative var dataFormat: _Raw.DataFormat
+    
+    public init(filterCount: Int, epsilon: Scalar = 1e-6, dataFormat: _Raw.DataFormat = .nhwc) {
+        self.dataFormat = dataFormat
+        self.tau = Tensor<Scalar>(zeros: [filterCount])
+        self.gamma = Tensor<Scalar>(ones: [filterCount])
+        self.beta = Tensor<Scalar>(zeros: [filterCount])
+        if dataFormat == .nchw {
+            self.tau = self.tau.reshaped(to: [1, filterCount, 1, 1])
+            self.gamma = self.gamma.reshaped(to: [1, filterCount, 1, 1])
+            self.beta = self.beta.reshaped(to: [1, filterCount, 1, 1])
+        }
+        self.epsilon = Tensor<Scalar>(epsilon)
+    }
+    
+    @differentiable
+    public func callAsFunction(_ input: Tensor<Scalar>) -> Tensor<Scalar> {
+        let axes = dataFormat == .nchw ? [2, 3] : [1, 2]
+        let meanNorm = input.squared().mean(alongAxes: axes)
+        return max(tau, input * TensorFlow.rsqrt(meanNorm + epsilon))
+    }
+}
 public struct WeightNormConv2D<Scalar: TensorFlowFloatingPoint>: Layer {
     public var filter: Tensor<Scalar> {
         didSet { filter = filter.weightNormalized() }
@@ -43,12 +104,12 @@ public struct WeightNormConv2D<Scalar: TensorFlowFloatingPoint>: Layer {
 
     var g: Tensor<Scalar>
     @noDerivative var stride: Int = 1
-    @noDerivative var dataFormat: Raw.DataFormat = .nhwc
+    @noDerivative var dataFormat: _Raw.DataFormat = .nhwc
 
     public init(filter: Tensor<Scalar>,
          g: Tensor<Scalar>,
          stride: Int = 1,
-         dataFormat: Raw.DataFormat = .nhwc)
+         dataFormat: _Raw.DataFormat = .nhwc)
     {
         self.filter = filter
         self.g = g
@@ -107,7 +168,7 @@ struct PreactConv2D<Scalar: TensorFlowFloatingPoint>: Layer {
 
     var bias1, bias2, g: Tensor<Scalar>
     @noDerivative let stride: Int
-    @noDerivative var dataFormat: Raw.DataFormat = .nhwc
+    @noDerivative var dataFormat: _Raw.DataFormat = .nhwc
     @noDerivative let activation: Activation
     public typealias Activation = @differentiable (Tensor<Scalar>) -> Tensor<Scalar>
 
@@ -117,7 +178,7 @@ struct PreactConv2D<Scalar: TensorFlowFloatingPoint>: Layer {
          g: Tensor<Scalar>,
          stride: Int = 1,
          activation: @escaping Activation = relu,
-         dataFormat: Raw.DataFormat = .nhwc)
+         dataFormat: _Raw.DataFormat = .nhwc)
     {
         self.filter = filter
         self.bias1 = bias1
@@ -151,7 +212,7 @@ struct PreactConv2D<Scalar: TensorFlowFloatingPoint>: Layer {
 struct Shortcut<Scalar: TensorFlowFloatingPoint>: Differentiable {
     @noDerivative let shortcutOp: @differentiable (Tensor<Scalar>) -> Tensor<Scalar>
     
-    init(stride: Int = 1, featureIncrease: Int = 0, dataFormat: Raw.DataFormat = .nhwc) {
+    init(stride: Int = 1, featureIncrease: Int = 0, dataFormat: _Raw.DataFormat = .nhwc) {
         if stride > 1 || featureIncrease != 0 {
             let channelAxis = dataFormat == .nchw ? 1 : 3
             var padding = [(before: 0, after: 0),
@@ -197,7 +258,7 @@ struct PreactResidualBlock<Scalar: TensorFlowFloatingPoint>: Layer {
         kernelSize: Int = 3,
         stride: Int = 1,
         activation: @escaping Activation = relu,
-        dataFormat: Raw.DataFormat = .nhwc
+        dataFormat: _Raw.DataFormat = .nhwc
     ) {
         self.stride = stride
         self.featureIn = featureIn
@@ -241,7 +302,7 @@ struct PreactResidualBlock<Scalar: TensorFlowFloatingPoint>: Layer {
 }
 
 public struct PreactResNet<Scalar: TensorFlowFloatingPoint>: Layer {
-    @noDerivative var dataFormat: Raw.DataFormat = .nhwc
+    @noDerivative var dataFormat: _Raw.DataFormat = .nhwc
     @noDerivative let activation: Activation
     @noDerivative let denseG: Float
     var multiplier1 = Tensor<Scalar>(ones: [1,1,1,1])
@@ -256,7 +317,7 @@ public struct PreactResNet<Scalar: TensorFlowFloatingPoint>: Layer {
 
     public init(
         activation: @escaping Activation = relu,
-        dataFormat: Raw.DataFormat = .nhwc,
+        dataFormat: _Raw.DataFormat = .nhwc,
         denseG: Float = 0
     ) {
         self.activation = activation
@@ -335,4 +396,118 @@ public struct PreactResNet<Scalar: TensorFlowFloatingPoint>: Layer {
         }
         dense1.weight = dense1.weight.weightNormalized()
     }
+}
+
+public struct Conv2DDF<Scalar: TensorFlowFloatingPoint>: Layer {
+    var filter, bias: Tensor<Scalar>
+    @noDerivative let stride: Int
+    @noDerivative let dataFormat: _Raw.DataFormat
+    
+    public init(filter: Tensor<Scalar>,
+                bias: Tensor<Scalar>,
+                stride: Int = 1,
+                dataFormat: _Raw.DataFormat = .nhwc) {
+        self.filter = filter
+        self.bias = bias
+        self.stride = stride
+        self.dataFormat = dataFormat
+    }
+    
+    @differentiable
+    public func callAsFunction(_ input: Tensor<Scalar>) -> Tensor<Scalar> {
+        return input.convolved2DDF(withFilter: filter,
+                                   strides: makeStrides(stride: stride, dataFormat: dataFormat),
+                                   padding: .same,
+                                   dataFormat: dataFormat) + bias
+    }
+}
+
+public struct ResidualBlock<Scalar: TensorFlowFloatingPoint>: Layer {
+    var conv1, conv2: Conv2DDF<Scalar>
+    var frn1, frn2: FilterResponseNormalization<Scalar>
+    @noDerivative let shortcut: Shortcut<Scalar>
+    
+    public init(featureIn: Int,
+                featureOut: Int,
+                stride: Int = 1,
+                dataFormat: _Raw.DataFormat = .nhwc) {
+        self.shortcut = Shortcut(stride: stride,
+                                 featureIncrease: featureOut - featureIn,
+                                 dataFormat: dataFormat)
+        let biasShape: TensorShape = dataFormat == .nchw ? [1, featureOut, 1, 1] : [featureOut]
+        self.conv1 = Conv2DDF(
+            filter: Tensor(orthogonal: [3, 3, featureIn, featureOut]),
+            bias: Tensor(zeros: biasShape),
+            stride: stride,
+            dataFormat: dataFormat
+        )
+        self.conv2 = Conv2DDF(
+            filter: Tensor(orthogonal: [3, 3, featureOut, featureOut]),
+            bias: Tensor(zeros: biasShape),
+            stride: 1,
+            dataFormat: dataFormat
+        )
+        self.frn1 = FilterResponseNormalization(filterCount: featureIn, dataFormat: dataFormat)
+        self.frn2 = FilterResponseNormalization(filterCount: featureOut, dataFormat: dataFormat)
+    }
+
+    @differentiable
+    public func callAsFunction(_ input: Tensor<Scalar>) -> Tensor<Scalar> {
+        return input.sequenced(through: frn1, conv1, frn2, conv2) + shortcut(input)
+    }
+}
+
+public struct FRNResnet<Scalar: TensorFlowFloatingPoint>: Layer {
+    var conv: Conv2DDF<Scalar>
+    var blocks: [ResidualBlock<Scalar>] = []
+    var frn: FilterResponseNormalization<Scalar>
+    var dense: Dense<Scalar>
+    @noDerivative let dataFormat: _Raw.DataFormat
+    
+    public init(dataFormat: _Raw.DataFormat =  .nhwc) {
+        self.dataFormat = dataFormat
+        let depth = 16
+        let depth2 = 64
+        let depth3 = 128
+        let depth4 = 256
+        let resUnitPerBlock = 5
+        let blockSpecs = [
+            (depthIn: depth, depthOut: depth2, stride: 1),
+            (depthIn: depth2, depthOut: depth3, stride: 2),
+            (depthIn: depth3, depthOut: depth4, stride: 2)
+        ]
+        
+        self.conv = Conv2DDF(
+            filter: Tensor(orthogonal: [3, 3, 3, depth]),
+            bias: Tensor(zeros: [depth]),
+            dataFormat: dataFormat
+        )
+        
+        for s in blockSpecs {
+            self.blocks += [ResidualBlock(featureIn: s.depthIn,
+                                        featureOut: s.depthOut,
+                                        stride: s.stride,
+                                        dataFormat: dataFormat)]
+            for _ in 1 ..< resUnitPerBlock {
+                self.blocks += [ResidualBlock(featureIn: s.depthOut,
+                                            featureOut: s.depthOut,
+                                            dataFormat: dataFormat)]
+            }
+        }
+        self.frn = FilterResponseNormalization(filterCount: depth4, dataFormat: dataFormat)
+        self.dense = Dense(weight: Tensor(orthogonal: [depth4, 10]),
+                            bias: Tensor(zeros: [1,1]),
+                            activation: identity)
+    }
+    
+    @differentiable
+    public func callAsFunction(_ input: Tensor<Scalar>) -> Tensor<Scalar> {
+        var tmp = conv(input)
+        tmp = blocks.differentiableReduce(tmp) { $1($0) }
+        tmp = frn(tmp)
+        let axes = dataFormat == .nchw ? [2, 3] : [1, 2]
+        tmp = tmp.mean(squeezingAxes: axes)
+        return dense(tmp)
+    }
+    
 }
