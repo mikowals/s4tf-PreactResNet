@@ -492,7 +492,7 @@ public struct FRNResnet<Scalar: TensorFlowFloatingPoint>: Layer {
             }
         }
         self.frn = FilterResponseNormalization(filterCount: depth4, dataFormat: dataFormat)
-        self.dense = Dense(weight: Tensor(orthogonal: [depth4, 10]),
+        self.dense = Dense(weight: Tensor(zeros: [depth4, 10]),
                             bias: Tensor(zeros: [1,1]),
                             activation: identity)
     }
