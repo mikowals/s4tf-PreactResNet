@@ -6,7 +6,7 @@ func mish<Scalar: TensorFlowFloatingPoint>(_ input: Tensor<Scalar>) -> Tensor<Sc
     return input * tanh(softplus(input))
 }
 
-extension Tensor where Scalar: TensorFlowFloatingPoint {
+public extension Tensor where Scalar: TensorFlowFloatingPoint {
     public init(channelWiseZeroMean shape: TensorShape){
         self.init(randomUniform: shape, lowerBound: Tensor<Scalar>(-1), upperBound: Tensor<Scalar>(1))
         self = self - self.mean(alongAxes: [0, 1])
@@ -14,29 +14,24 @@ extension Tensor where Scalar: TensorFlowFloatingPoint {
     }
     
     @differentiable
-    func l2Loss() -> Tensor<Scalar> {
+    public func l2Loss() -> Tensor<Scalar> {
         return squared().sum()
     }
     
-    @differentiable
-    func l2UnitLoss() -> Tensor<Scalar> {
-        return (TensorFlow.sqrt(l2Loss()) - Scalar(1)).squared()
-    }
-    
     @differentiable(wrt: self)
-    func l2Norm(alongAxes axes: [Int]) -> Tensor<Scalar> {
+    public func l2Norm(alongAxes axes: [Int]) -> Tensor<Scalar> {
         return TensorFlow.sqrt(squared().sum(alongAxes: axes))
     }
     
     @differentiable(wrt: self)
-    func weightNormalized() -> Tensor<Scalar> {
+    public func weightNormalized() -> Tensor<Scalar> {
         let axes = Array<Int>(shape.indices.dropLast())
         let centered = self - self.mean(alongAxes: axes)
         return centered / (centered.l2Norm(alongAxes: axes))
     }
 }
 
-func makeStrides(stride: Int, dataFormat: Raw.DataFormat) -> (Int, Int, Int, Int) {
+public func makeStrides(stride: Int, dataFormat: Raw.DataFormat) -> (Int, Int, Int, Int) {
     let strides: (Int, Int, Int, Int)
     switch dataFormat {
     case .nchw:
@@ -182,10 +177,10 @@ struct PreactConv2D<Scalar: TensorFlowFloatingPoint>: Layer {
     }
 }
 
-struct Shortcut<Scalar: TensorFlowFloatingPoint>: Differentiable {
+public struct Shortcut<Scalar: TensorFlowFloatingPoint>: Differentiable {
     @noDerivative let shortcutOp: @differentiable (Tensor<Scalar>) -> Tensor<Scalar>
     
-    init(stride: Int = 1, featureIncrease: Int = 0, dataFormat: Raw.DataFormat = .nhwc) {
+    public init(stride: Int = 1, featureIncrease: Int = 0, dataFormat: Raw.DataFormat = .nhwc) {
         if stride > 1 || featureIncrease != 0 {
             let channelAxis = dataFormat == .nchw ? 1 : 3
             var padding = [(before: 0, after: 0),
@@ -208,7 +203,7 @@ struct Shortcut<Scalar: TensorFlowFloatingPoint>: Differentiable {
     }
     
     @differentiable
-    func callAsFunction(_ input: Tensor<Scalar>) -> Tensor<Scalar> {
+    public func callAsFunction(_ input: Tensor<Scalar>) -> Tensor<Scalar> {
         return shortcutOp(input)
     }
 }
