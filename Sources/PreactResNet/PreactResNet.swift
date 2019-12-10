@@ -473,10 +473,10 @@ public struct FRNResnet<Scalar: TensorFlowFloatingPoint>: Layer {
             (depthIn: depth2, depthOut: depth3, stride: 2),
             (depthIn: depth3, depthOut: depth4, stride: 2)
         ]
-        
+        let biasShape: TensorShape = dataFormat == .nchw ? [1, depth, 1, 1] : [depth]
         self.conv = Conv2DDF(
             filter: Tensor(orthogonal: [3, 3, 3, depth]),
-            bias: Tensor(zeros: [depth]),
+            bias: Tensor(zeros: biasShape),
             dataFormat: dataFormat
         )
         
