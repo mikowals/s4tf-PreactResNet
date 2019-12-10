@@ -47,29 +47,26 @@ func makeStrides(stride: Int, dataFormat: _Raw.DataFormat) -> (Int, Int, Int, In
     return strides
 }
 
-public struct ReparameterizedConv2D<Scalar: TensorFlowFloatingPoint>: Layer {
-    public var filter, g: Tensor<Scalar>
+public struct ReparameterizedConv2D: Layer {
+    public var filter, g: Tensor<Float>
     @noDerivative var stride: Int = 1
     @noDerivative var dataFormat: _Raw.DataFormat = .nhwc
     
     public init(filterShape: TensorShape, stride: Int = 1, dataFormat: _Raw.DataFormat = .nhwc) {
-        self.filter = Tensor<Scalar>(channelWiseZeroMean: filterShape)
-        self.g = Tensor<Scalar>(repeating: Scalar(TensorFlow.log(0.5)), shape: [filterShape[3]])
+        self.filter = Tensor<Float>(channelWiseZeroMean: filterShape)
+        self.g = Tensor<Float>(repeating: Float(TensorFlow.log(0.5)), shape: [filterShape[3]])
         self.stride = stride
         self.dataFormat = dataFormat
     }
     
     @differentiable
-    public func callAsFunction(_ input: Tensor<Scalar>) -> Tensor<Scalar> {
-        /*let reparameterizedFilter = filter.withDerivative({ (v: inout Tensor<Scalar>) in
-              v = v - v.mean(alongAxes: [0, 1]) * Scalar(0.85)
-          }
-        ) * TensorFlow.exp(g) */
+    public func callAsFunction(_ input: Tensor<Float>) -> Tensor<Float> {
         return input.convolved2DDF(
-            withFilter: filter * TensorFlow.exp(g),
-                        strides: makeStrides(stride: stride, dataFormat: dataFormat),
-                        padding: .same,
-                        dataFormat: dataFormat)
+            withFilter: filter.withDerivative({ (v: inout Tensor<Float>) in
+                v -= v.mean(alongAxes: [0, 1]) * Float(0.85) }) * TensorFlow.exp(g),
+            strides: makeStrides(stride: stride, dataFormat: dataFormat),
+            padding: .same,
+            dataFormat: dataFormat)
     }
 }
 
