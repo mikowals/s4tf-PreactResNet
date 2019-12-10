@@ -5,14 +5,14 @@ import TensorFlow
 
 final class PreactResNetTests: XCTestCase {
     func testFRNResnet() {
-        var model = FRNResnet<Float>(dataFormat: _Raw.DataFormat.nhwc)
+        var model = FRNResnet<Float>(dataFormat: Raw.DataFormat.nhwc)
         let input = Tensor<Float>(randomNormal: [128, 32, 32, 3])
         let output = model(input)
         XCTAssertEqual(output.shape, [128, 10])
     }
     
     func testGetSetParameters() {
-        var model = PreactResNet<Float>(dataFormat: _Raw.DataFormat.nhwc, denseG: 0)
+        var model = PreactResNet<Float>(dataFormat: Raw.DataFormat.nhwc, denseG: 0)
         var parameters = model.differentiableVectorView
         let originalParameters = parameters
         var count = 0
