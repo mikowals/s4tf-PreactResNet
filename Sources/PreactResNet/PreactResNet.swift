@@ -53,8 +53,8 @@ public struct ReparameterizedConv2D: Layer {
     @noDerivative var dataFormat: Raw.DataFormat = .nhwc
     
     public init(filterShape: TensorShape, stride: Int = 1, dataFormat: Raw.DataFormat = .nhwc) {
-        self.filter = Tensor<Scalar>(channelWiseZeroMean: filterShape)
-        self.g = Tensor<Scalar>(repeating: Scalar(TensorFlow.log(0.5)), shape: [filterShape[3]])
+        self.filter = Tensor<Float>(channelWiseZeroMean: filterShape)
+        self.g = Tensor<Float>(repeating: Float(TensorFlow.log(0.5)), shape: [filterShape[3]])
         self.stride = stride
         self.dataFormat = dataFormat
     }
