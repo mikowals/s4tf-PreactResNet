@@ -8,7 +8,7 @@ func mish<Scalar: TensorFlowFloatingPoint>(_ input: Tensor<Scalar>) -> Tensor<Sc
 
 public extension Tensor where Scalar: TensorFlowFloatingPoint {
     public init(channelWiseZeroMean shape: TensorShape){
-        self.init(orthogonal: shape)//, lowerBound: Tensor<Scalar>(-1), upperBound: Tensor<Scalar>(1))
+        self.init(randomUniform: shape, lowerBound: Tensor<Scalar>(-1), upperBound: Tensor<Scalar>(1))
         self = self - self.mean(alongAxes: [0, 1])
         self = self / self.l2Norm(alongAxes: [0, 1, 2])
     }
@@ -49,7 +49,7 @@ public struct ReparameterizedConv2D: Layer {
     
     public init(filterShape: TensorShape, stride: Int = 1, dataFormat: Raw.DataFormat = .nhwc) {
         self.filter = Tensor<Float>(channelWiseZeroMean: filterShape)
-        self.g = Tensor<Float>(repeating: Float(TensorFlow.log(0.5)), shape: [filterShape[3]])
+        self.g = Tensor<Float>(repeating: Float(TensorFlow.log(0.8)), shape: [filterShape[3]])
         self.stride = stride
         self.dataFormat = dataFormat
     }
