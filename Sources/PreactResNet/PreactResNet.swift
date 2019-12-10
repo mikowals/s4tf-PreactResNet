@@ -8,7 +8,7 @@ func mish<Scalar: TensorFlowFloatingPoint>(_ input: Tensor<Scalar>) -> Tensor<Sc
 
 public extension Tensor where Scalar: TensorFlowFloatingPoint {
     public init(channelWiseZeroMean shape: TensorShape){
-        self.init(randomUniform: shape, lowerBound: Tensor<Scalar>(-1), upperBound: Tensor<Scalar>(1))
+        self.init(orthogonal: shape)//, lowerBound: Tensor<Scalar>(-1), upperBound: Tensor<Scalar>(1))
         self = self - self.mean(alongAxes: [0, 1])
         self = self / self.l2Norm(alongAxes: [0, 1, 2])
     }

@@ -4,13 +4,6 @@ import TensorFlow
 @testable import PreactResNet
 
 final class PreactResNetTests: XCTestCase {
-    func testFRNResnet() {
-        var model = FRNResnet<Float>(dataFormat: Raw.DataFormat.nhwc)
-        let input = Tensor<Float>(randomNormal: [128, 32, 32, 3])
-        let output = model(input)
-        XCTAssertEqual(output.shape, [128, 10])
-    }
-    
     func testGetSetParameters() {
         var model = PreactResNet<Float>(dataFormat: Raw.DataFormat.nhwc, denseG: 0)
         var parameters = model.differentiableVectorView
