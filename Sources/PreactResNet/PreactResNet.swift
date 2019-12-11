@@ -52,7 +52,7 @@ public struct ReparameterizedConv2D: Layer {
          stride: Int = 1,
          dataFormat: _Raw.DataFormat = .nhwc) {
         self.filter = Tensor<Float>(channelWiseZeroMean: filterShape)
-        self.g = Tensor<Float>(repeating: initialG, shape: [filterShape[3]])
+        self.g = Tensor<Float>(repeating: TensorFlow.log(initialG), shape: [filterShape[3]])
         self.stride = stride
         self.dataFormat = dataFormat
     }
