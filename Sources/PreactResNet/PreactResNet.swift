@@ -7,24 +7,24 @@ func mish<Scalar: TensorFlowFloatingPoint>(_ input: Tensor<Scalar>) -> Tensor<Sc
 }
 
 public extension Tensor where Scalar: TensorFlowFloatingPoint {
-    public init(channelWiseZeroMean shape: TensorShape){
+    init(channelWiseZeroMean shape: TensorShape){
         self.init(randomUniform: shape, lowerBound: Tensor<Scalar>(-1), upperBound: Tensor<Scalar>(1))
         self = self - self.mean(alongAxes: [0, 1])
         self = self / self.l2Norm(alongAxes: [0, 1, 2])
     }
     
     @differentiable
-    public func l2Loss() -> Tensor<Scalar> {
+    func l2Loss() -> Tensor<Scalar> {
         return squared().sum()
     }
     
     @differentiable(wrt: self)
-    public func l2Norm(alongAxes axes: [Int]) -> Tensor<Scalar> {
+    func l2Norm(alongAxes axes: [Int]) -> Tensor<Scalar> {
         return TensorFlow.sqrt(squared().sum(alongAxes: axes))
     }
     
     @differentiable(wrt: self)
-    public func weightNormalized() -> Tensor<Scalar> {
+    func weightNormalized() -> Tensor<Scalar> {
         let axes = Array<Int>(shape.indices.dropLast())
         let centered = self - self.mean(alongAxes: axes)
         return centered / (centered.l2Norm(alongAxes: axes))
@@ -47,9 +47,12 @@ public struct ReparameterizedConv2D: Layer {
     @noDerivative var stride: Int = 1
     @noDerivative var dataFormat: _Raw.DataFormat = .nhwc
     
-    public init(filterShape: TensorShape, stride: Int = 1, dataFormat: _Raw.DataFormat = .nhwc) {
+    init(filterShape: TensorShape,
+         initialG: Float = TensorFlow.log(0.8),
+         stride: Int = 1,
+         dataFormat: _Raw.DataFormat = .nhwc) {
         self.filter = Tensor<Float>(channelWiseZeroMean: filterShape)
-        self.g = Tensor<Float>(repeating: Float(TensorFlow.log(0.8)), shape: [filterShape[3]])
+        self.g = Tensor<Float>(repeating: initialG, shape: [filterShape[3]])
         self.stride = stride
         self.dataFormat = dataFormat
     }
@@ -74,7 +77,7 @@ public struct WeightNormConv2D<Scalar: TensorFlowFloatingPoint>: Layer {
     @noDerivative var stride: Int = 1
     @noDerivative var dataFormat: _Raw.DataFormat = .nhwc
 
-    public init(filter: Tensor<Scalar>,
+    init(filter: Tensor<Scalar>,
          g: Tensor<Scalar>,
          stride: Int = 1,
          dataFormat: _Raw.DataFormat = .nhwc)
@@ -108,7 +111,7 @@ public struct WeightNormDense<Scalar: TensorFlowFloatingPoint>: Layer {
     }
     var bias, g: Tensor<Scalar>
     
-    public init(weight: Tensor<Scalar>, bias: Tensor<Scalar>, g: Tensor<Scalar>) {
+    init(weight: Tensor<Scalar>, bias: Tensor<Scalar>, g: Tensor<Scalar>) {
         self.weight = weight
         self.bias = bias
         self.g = g
@@ -180,7 +183,7 @@ struct PreactConv2D<Scalar: TensorFlowFloatingPoint>: Layer {
 public struct Shortcut<Scalar: TensorFlowFloatingPoint>: Differentiable {
     @noDerivative let shortcutOp: @differentiable (Tensor<Scalar>) -> Tensor<Scalar>
     
-    public init(stride: Int = 1, featureIncrease: Int = 0, dataFormat: _Raw.DataFormat = .nhwc) {
+    init(stride: Int = 1, featureIncrease: Int = 0, dataFormat: _Raw.DataFormat = .nhwc) {
         if stride > 1 || featureIncrease != 0 {
             let channelAxis = dataFormat == .nchw ? 1 : 3
             var padding = [(before: 0, after: 0),
@@ -283,7 +286,7 @@ public struct PreactResNet<Scalar: TensorFlowFloatingPoint>: Layer {
     
     public typealias Activation = @differentiable (Tensor<Scalar>) -> Tensor<Scalar>
 
-    public init(
+    init(
         activation: @escaping Activation = relu,
         dataFormat: _Raw.DataFormat = .nhwc,
         denseG: Float = 0
