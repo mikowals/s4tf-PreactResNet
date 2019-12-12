@@ -48,7 +48,7 @@ public struct ReparameterizedConv2D: Layer {
     @noDerivative var dataFormat: _Raw.DataFormat = .nhwc
     
     public init(filterShape: TensorShape,
-         initialG: Float = TensorFlow.log(0.8),
+         initialG: Float = 0.8,
          stride: Int = 1,
          dataFormat: _Raw.DataFormat = .nhwc) {
         self.filter = Tensor<Float>(channelWiseZeroMean: filterShape)
