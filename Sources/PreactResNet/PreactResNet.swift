@@ -63,7 +63,7 @@ public struct ReparameterizedConv2D: Layer {
     @differentiable
     public func callAsFunction(_ input: Tensor<Float>) -> Tensor<Float> {
         return input.convolved2DDF(
-            withFilter: filter.withDerivative({ ([zmg] v: inout Tensor<Float>) in
+            withFilter: filter.withDerivative({ [zmg] (v: inout Tensor<Float>) in
                 v -= v.mean(alongAxes: [0, 1]) * zmg }) * TensorFlow.exp(g),
             strides: makeStrides(stride: stride, dataFormat: dataFormat),
             padding: .same,
