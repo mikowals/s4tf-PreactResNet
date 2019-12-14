@@ -46,22 +46,25 @@ public struct ReparameterizedConv2D: Layer {
     public var filter, g: Tensor<Float>
     @noDerivative var stride: Int = 1
     @noDerivative var dataFormat: _Raw.DataFormat = .nhwc
+    @noDerivative var zmg: Float
     
     public init(filterShape: TensorShape,
          initialG: Float = 0.8,
          stride: Int = 1,
-         dataFormat: _Raw.DataFormat = .nhwc) {
+         dataFormat: _Raw.DataFormat = .nhwc,
+         zmg: Float = 0.85) {
         self.filter = Tensor<Float>(channelWiseZeroMean: filterShape)
         self.g = Tensor<Float>(repeating: TensorFlow.log(initialG), shape: [filterShape[3]])
         self.stride = stride
         self.dataFormat = dataFormat
+        self.zmg = zmg
     }
     
     @differentiable
     public func callAsFunction(_ input: Tensor<Float>) -> Tensor<Float> {
         return input.convolved2DDF(
             withFilter: filter.withDerivative({ (v: inout Tensor<Float>) in
-                v -= v.mean(alongAxes: [0, 1]) * Float(0.85) }) * TensorFlow.exp(g),
+                v -= v.mean(alongAxes: [0, 1]) * zmg }) * TensorFlow.exp(g),
             strides: makeStrides(stride: stride, dataFormat: dataFormat),
             padding: .same,
             dataFormat: dataFormat)
