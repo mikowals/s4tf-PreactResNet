@@ -14,7 +14,7 @@ public func noise<Scalar: TensorFlowFloatingPoint>(_ input: Tensor<Scalar>,
     case .training:
         let rnd = Tensor<Scalar>(randomNormal: input.shape,
                                  mean: Tensor(0),
-                                 standardDeviation: Tensor(standarDeviation))
+                                 standardDeviation: Tensor(standardDeviation))
         return rnd + input
     case .inference:
         return input
