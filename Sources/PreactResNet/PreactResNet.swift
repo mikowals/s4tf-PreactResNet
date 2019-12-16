@@ -183,7 +183,7 @@ struct PreactConv2D<Scalar: TensorFlowFloatingPoint>: Layer {
 
     @differentiable
     func callAsFunction(_ input: Tensor<Scalar>) -> Tensor<Scalar> {
-        let tmp = activation(input + bias1) + bias2
+        let tmp = max(input, bias1) //+ bias2
         return tmp.convolved2DDF(withFilter: filter * g,
                                  strides: makeStrides(stride: stride, dataFormat: dataFormat),
                                  padding: .same,
@@ -358,7 +358,7 @@ public struct PreactResNet<Scalar: TensorFlowFloatingPoint>: Layer {
     public func callAsFunction(_ input: Tensor<Scalar>) -> Tensor<Scalar>{
         var tmp = conv1(noise(input)) * multiplier1 + bias1
         tmp = blocks.differentiableReduce(tmp) {last, layer in layer(last)}
-        tmp = activation(tmp * multiplier2 + bias2)
+        tmp = max(tmp * multiplier2, bias2)
         let squeezingAxes = dataFormat == .nchw ? [2, 3] : [1, 2]
         tmp = tmp.mean(squeezingAxes: squeezingAxes)
         return dense1(tmp)
