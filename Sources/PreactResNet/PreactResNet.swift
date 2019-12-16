@@ -6,19 +6,26 @@ func mish<Scalar: TensorFlowFloatingPoint>(_ input: Tensor<Scalar>) -> Tensor<Sc
     return input * tanh(softplus(input))
 }
 
-@differentiable(wrt: input)
+@differentiable(wrt: input, vjp: vjpNoise)
 public func noise<Scalar: TensorFlowFloatingPoint>(_ input: Tensor<Scalar>,
-                                                   standardDeviation: Scalar = 0.1
+                                                   standardDeviation: Scalar = 0.05
 ) -> Tensor<Scalar> {
     switch Context.local.learningPhase {
     case .training:
         let rnd = Tensor<Scalar>(randomNormal: input.shape,
-                                 mean: Tensor(0),
+                                 mean: Tensor(1),
                                  standardDeviation: Tensor(standardDeviation))
-        return rnd + input
+        return rnd * input
     case .inference:
         return input
     }
+}
+
+@usableFromInline
+func vjpNoise<Scalar: TensorFlowFloatingPoint>(_ input: Tensor<Scalar>,
+                                                   standardDeviation: Scalar = 0.1
+) -> (Tensor<Scalar>, (Tensor<Scalar>) -> Tensor<Scalar>) {
+    return (noise(input, standardDeviation: standardDeviation), identity)
 }
 
 public extension Tensor where Scalar: TensorFlowFloatingPoint {
