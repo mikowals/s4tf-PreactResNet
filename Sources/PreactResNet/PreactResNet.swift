@@ -241,7 +241,7 @@ public struct PreactResidualBlock<Scalar: TensorFlowFloatingPoint>: Layer {
                                  featureIncrease: featureOut - featureIn,
                                  dataFormat: dataFormat)
         self.conv1 = PreactConv2D(
-            filter: Tensor(orthogonal: [kernelSize, kernelSize, featureIn, featureOut]),
+            filter: Tensor(channelwiseZeroMean: [kernelSize, kernelSize, featureIn, featureOut]),
             bias1: Tensor(zeros: [1,1,1,1]),
             bias2: Tensor(zeros: [1,1,1,1]),
             g: Tensor(ones: [featureOut]) * sqrt(Scalar(2 * featureIn) / Scalar(featureOut)),
@@ -250,7 +250,7 @@ public struct PreactResidualBlock<Scalar: TensorFlowFloatingPoint>: Layer {
             dataFormat: dataFormat
         )
         self.conv2 = PreactConv2D(
-            filter: Tensor(orthogonal: [kernelSize, kernelSize, featureOut, featureOut]),
+            filter: Tensor(channelwiseZeroMean: [kernelSize, kernelSize, featureOut, featureOut]),
             bias1: Tensor(zeros: [1,1,1,1]),
             bias2: Tensor(zeros: [1,1,1,1]),
             g: Tensor(ones: [featureOut]) * rsqrt(Tensor<Scalar>(5)),
@@ -309,7 +309,7 @@ public struct PreactResNet<Scalar: TensorFlowFloatingPoint>: Layer {
         ]
         
         self.conv1 = WeightNormConv2D(
-            filter: Tensor(orthogonal: [3, 3, 3, depth]),
+            filter: Tensor(channelwiseZeroMean: [3, 3, 3, depth]),
             g: Tensor(ones: [depth]) * sqrt(Scalar(2 * 3) / Scalar(depth)),
             stride: 1,
             dataFormat: dataFormat
