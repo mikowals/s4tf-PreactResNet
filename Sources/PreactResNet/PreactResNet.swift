@@ -6,7 +6,7 @@ func mish<Scalar: TensorFlowFloatingPoint>(_ input: Tensor<Scalar>) -> Tensor<Sc
     return input * tanh(softplus(input))
 }
 
-@differentiable
+@differentiable(wrt: input)
 public func noise<Scalar: TensorFlowFloatingPoint>(_ input: Tensor<Scalar>,
                                                    standardDeviation: Scalar = 0.1
 ) -> Tensor<Scalar> {
