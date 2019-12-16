@@ -7,8 +7,8 @@ func mish<Scalar: TensorFlowFloatingPoint>(_ input: Tensor<Scalar>) -> Tensor<Sc
 }
 
 @differentiable
-func noise(_ input: Tensor<Float>) -> Tensor<Float> {
-    let rnd = Tensor<Float>(randomNormal: input.shape, mean: Tensor<Float>(0), standardDeviation: Tensor<Float>(0.1))
+func noise<Scalar: TensorFlowFloatingPoint>(_ input: Tensor<Scalar>) -> Tensor<Scalar> {
+    let rnd = Tensor<Scalar>(randomNormal: input.shape, mean: Tensor(0), standardDeviation: Tensor(0.1))
     return rnd + input
 }
 
