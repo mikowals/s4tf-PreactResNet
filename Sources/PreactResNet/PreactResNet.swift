@@ -284,7 +284,7 @@ public struct PreactResidualBlock<Scalar: TensorFlowFloatingPoint>: Layer {
 
     @differentiable
     public func callAsFunction(_ input: Tensor<Scalar>) -> Tensor<Scalar> {
-        let tmp = conv2(conv1(input))
+        let tmp = conv2(conv1(noise(input)))
         let sc = shortcut(input)
         return tmp * multiplier + bias + sc
     }
@@ -363,7 +363,7 @@ public struct PreactResNet<Scalar: TensorFlowFloatingPoint>: Layer {
 
     @differentiable
     public func callAsFunction(_ input: Tensor<Scalar>) -> Tensor<Scalar>{
-        var tmp = conv1(input) * multiplier1 + bias1
+        var tmp = conv1(noise(input)) * multiplier1 + bias1
         tmp = blocks.differentiableReduce(tmp) {last, layer in layer(last)}
         tmp = max(tmp * multiplier2, bias2)
         let squeezingAxes = dataFormat == .nchw ? [2, 3] : [1, 2]
