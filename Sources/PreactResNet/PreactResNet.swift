@@ -7,10 +7,14 @@ func mish<Scalar: TensorFlowFloatingPoint>(_ input: Tensor<Scalar>) -> Tensor<Sc
 }
 
 @differentiable
-func noise<Scalar: TensorFlowFloatingPoint>(_ input: Tensor<Scalar>) -> Tensor<Scalar> {
+public func noise<Scalar: TensorFlowFloatingPoint>(_ input: Tensor<Scalar>,
+                                                   standardDeviation: Scalar = 0.1
+) -> Tensor<Scalar> {
     switch Context.local.learningPhase {
     case .training:
-        let rnd = Tensor<Scalar>(randomNormal: input.shape, mean: Tensor(0), standardDeviation: Tensor(0.1))
+        let rnd = Tensor<Scalar>(randomNormal: input.shape,
+                                 mean: Tensor(0),
+                                 standardDeviation: Tensor(standarDeviation))
         return rnd + input
     case .inference:
         return input
