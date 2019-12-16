@@ -86,7 +86,7 @@ public struct WeightNormConv2D<Scalar: TensorFlowFloatingPoint>: Layer {
          dataFormat: _Raw.DataFormat = .nhwc)
     {
         self.filter = filter
-        self.g = g
+        self.g = TensorFlow.log(g)
         self.stride = stride
         self.dataFormat = dataFormat
         defer {
@@ -96,7 +96,7 @@ public struct WeightNormConv2D<Scalar: TensorFlowFloatingPoint>: Layer {
     
     @differentiable
     public func callAsFunction(_ input: Tensor<Scalar>) -> Tensor<Scalar>{
-        return input.convolved2DDF(withFilter: filter * g,
+        return input.convolved2DDF(withFilter: filter * TensorFlow.exp(g),
                                    strides: makeStrides(stride: stride, dataFormat: dataFormat),
                                    padding: .same,
                                    dataFormat: dataFormat)
@@ -117,7 +117,7 @@ public struct WeightNormDense<Scalar: TensorFlowFloatingPoint>: Layer {
     init(weight: Tensor<Scalar>, bias: Tensor<Scalar>, g: Tensor<Scalar>) {
         self.weight = weight
         self.bias = bias
-        self.g = g
+        self.g = TensorFlow.log(g)
         defer {
             self.weight = self.weight
         }
@@ -125,7 +125,7 @@ public struct WeightNormDense<Scalar: TensorFlowFloatingPoint>: Layer {
 
     @differentiable
     public func callAsFunction(_ input: Tensor<Scalar>) -> Tensor<Scalar> {
-        return matmul(input + bias, weight * g) //weight.weightNormalized(g: g))
+        return matmul(input + bias, weight * TensorFlow.exp(g)) //weight.weightNormalized(g: g))
     }
     
     mutating func replaceParameters(_ newValue: TangentVector) {
@@ -214,7 +214,7 @@ public struct Shortcut<Scalar: TensorFlowFloatingPoint>: Differentiable {
     }
 }
 
-struct PreactResidualBlock<Scalar: TensorFlowFloatingPoint>: Layer {
+public struct PreactResidualBlock<Scalar: TensorFlowFloatingPoint>: Layer {
     @noDerivative let stride: Int
     @noDerivative let featureIn: Int
     @noDerivative let featureOut: Int
@@ -226,7 +226,7 @@ struct PreactResidualBlock<Scalar: TensorFlowFloatingPoint>: Layer {
     
     public typealias Activation = @differentiable (Tensor<Scalar>) -> Tensor<Scalar>
 
-    public init(
+    init(
         featureIn: Int,
         featureOut: Int,
         kernelSize: Int = 3,
@@ -261,13 +261,13 @@ struct PreactResidualBlock<Scalar: TensorFlowFloatingPoint>: Layer {
     }
 
     @differentiable
-    func callAsFunction(_ input: Tensor<Scalar>) -> Tensor<Scalar> {
+    public func callAsFunction(_ input: Tensor<Scalar>) -> Tensor<Scalar> {
         let tmp = conv2(conv1(input))
         let sc = shortcut(input)
         return tmp * multiplier + bias + sc
     }
     
-    mutating func replaceParameters(_ newValue: TangentVector) {
+    public mutating func replaceParameters(_ newValue: TangentVector) {
         conv1.replaceParameters(newValue.conv1)
         conv2.replaceParameters(newValue.conv2)
         multiplier = newValue.multiplier
