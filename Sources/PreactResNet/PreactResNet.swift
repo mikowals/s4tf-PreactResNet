@@ -289,7 +289,7 @@ public struct PreactResNet<Scalar: TensorFlowFloatingPoint>: Layer {
     
     public typealias Activation = @differentiable (Tensor<Scalar>) -> Tensor<Scalar>
 
-    init(
+    public init(
         activation: @escaping Activation = relu,
         dataFormat: _Raw.DataFormat = .nhwc,
         denseG: Float = 0
