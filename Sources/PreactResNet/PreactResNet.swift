@@ -14,6 +14,7 @@ func noise<Scalar: TensorFlowFloatingPoint>(_ input: Tensor<Scalar>) -> Tensor<S
         return rnd + input
     case .inference:
         return input
+    }
 }
 
 public extension Tensor where Scalar: TensorFlowFloatingPoint {
