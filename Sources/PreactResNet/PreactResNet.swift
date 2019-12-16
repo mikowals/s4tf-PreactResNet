@@ -6,6 +6,12 @@ func mish<Scalar: TensorFlowFloatingPoint>(_ input: Tensor<Scalar>) -> Tensor<Sc
     return input * tanh(softplus(input))
 }
 
+@differentiable
+func noise(_ input: Tensor<Float>) -> Tensor<Float> {
+    let rnd = Tensor<Float>(randomNormal: input.shape, mean: Tensor<Float>(0), standardDeviation: Tensor<Float>(0.1))
+    return rnd + input
+}
+
 public extension Tensor where Scalar: TensorFlowFloatingPoint {
     init(channelwiseZeroMean shape: TensorShape){
         self.init(randomUniform: shape, lowerBound: Tensor<Scalar>(-1), upperBound: Tensor<Scalar>(1))
@@ -262,7 +268,7 @@ public struct PreactResidualBlock<Scalar: TensorFlowFloatingPoint>: Layer {
 
     @differentiable
     public func callAsFunction(_ input: Tensor<Scalar>) -> Tensor<Scalar> {
-        let tmp = conv2(conv1(input))
+        let tmp = conv2(conv1(noise(input)))
         let sc = shortcut(input)
         return tmp * multiplier + bias + sc
     }
@@ -341,7 +347,7 @@ public struct PreactResNet<Scalar: TensorFlowFloatingPoint>: Layer {
 
     @differentiable
     public func callAsFunction(_ input: Tensor<Scalar>) -> Tensor<Scalar>{
-        var tmp = conv1(input) * multiplier1 + bias1
+        var tmp = conv1(noise(input)) * multiplier1 + bias1
         tmp = blocks.differentiableReduce(tmp) {last, layer in layer(last)}
         tmp = activation(tmp * multiplier2 + bias2)
         let squeezingAxes = dataFormat == .nchw ? [2, 3] : [1, 2]
