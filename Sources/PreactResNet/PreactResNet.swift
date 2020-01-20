@@ -8,7 +8,7 @@ func mish<Scalar: TensorFlowFloatingPoint>(_ input: Tensor<Scalar>) -> Tensor<Sc
 
 @differentiable(wrt: input, vjp: vjpNoise)
 public func noise<Scalar: TensorFlowFloatingPoint>(_ input: Tensor<Scalar>,
-                                                   standardDeviation: Scalar = 0.05
+                                                   standardDeviation: Scalar = 0.1
 ) -> Tensor<Scalar> {
     switch Context.local.learningPhase {
     case .training:
@@ -31,7 +31,7 @@ func vjpNoise<Scalar: TensorFlowFloatingPoint>(_ input: Tensor<Scalar>,
 public extension Tensor where Scalar: TensorFlowFloatingPoint {
     init(channelwiseZeroMean shape: TensorShape){
         self.init(randomUniform: shape, lowerBound: Tensor<Scalar>(-1), upperBound: Tensor<Scalar>(1))
-        self = self - self.mean(alongAxes: [0, 1])
+        self = self - self.mean(alongAxes: [0, 1, 2])
         self = self / self.l2Norm(alongAxes: [0, 1, 2])
     }
     
@@ -50,6 +50,22 @@ public extension Tensor where Scalar: TensorFlowFloatingPoint {
         let axes = Array<Int>(shape.indices.dropLast())
         let centered = self - self.mean(alongAxes: axes)
         return centered / (centered.l2Norm(alongAxes: axes))
+    }
+    
+    @differentiable(wrt: self, vjp: vjpUniformNoise)
+    func uniformNoise(_ amplitude: Scalar = 0.1) -> Tensor {
+        let noise = Tensor(randomUniform: shape,
+                           lowerBound: Tensor<Scalar>(1 - amplitude),
+                           upperBound: Tensor<Scalar>(1 + amplitude))
+        return self * noise
+    }
+
+    func vjpUniformNoise(_ amplitude: Scalar = 0.1) -> (Tensor, (Tensor) -> Tensor) {
+        return (uniformNoise(amplitude), {v in
+            v * Tensor(randomUniform: v.shape,
+                       lowerBound: Tensor<Scalar>(1 - amplitude),
+                       upperBound: Tensor<Scalar>(1 + amplitude))
+        })
     }
 }
 
@@ -284,7 +300,7 @@ public struct PreactResidualBlock<Scalar: TensorFlowFloatingPoint>: Layer {
 
     @differentiable
     public func callAsFunction(_ input: Tensor<Scalar>) -> Tensor<Scalar> {
-        let tmp = conv2(conv1(noise(input)))
+        let tmp = conv2(conv1(input.uniformNoise()))
         let sc = shortcut(input)
         return tmp * multiplier + bias + sc
     }
@@ -363,7 +379,7 @@ public struct PreactResNet<Scalar: TensorFlowFloatingPoint>: Layer {
 
     @differentiable
     public func callAsFunction(_ input: Tensor<Scalar>) -> Tensor<Scalar>{
-        var tmp = conv1(noise(input)) * multiplier1 + bias1
+        var tmp = conv1(input.uniformNoise()) * multiplier1 + bias1
         tmp = blocks.differentiableReduce(tmp) {last, layer in layer(last)}
         tmp = max(tmp * multiplier2, bias2)
         let squeezingAxes = dataFormat == .nchw ? [2, 3] : [1, 2]
@@ -393,4 +409,3 @@ public struct PreactResNet<Scalar: TensorFlowFloatingPoint>: Layer {
         dense1.weight = dense1.weight.weightNormalized()
     }
 }
-
