@@ -6,33 +6,10 @@ func mish<Scalar: TensorFlowFloatingPoint>(_ input: Tensor<Scalar>) -> Tensor<Sc
     return input * tanh(softplus(input))
 }
 
-@differentiable(wrt: input, vjp: vjpNoise)
-public func noise<Scalar: TensorFlowFloatingPoint>(_ input: Tensor<Scalar>,
-                                                   standardDeviation: Scalar = 0.1
-) -> Tensor<Scalar> {
-    switch Context.local.learningPhase {
-    case .training:
-        let rnd = Tensor<Scalar>(randomNormal: input.shape,
-                                 mean: Tensor(1),
-                                 standardDeviation: Tensor(standardDeviation))
-        return rnd * input
-    case .inference:
-        return input
-    }
-}
-
-@usableFromInline
-func vjpNoise<Scalar: TensorFlowFloatingPoint>(_ input: Tensor<Scalar>,
-                                                   standardDeviation: Scalar = 0.1
-) -> (Tensor<Scalar>, (Tensor<Scalar>) -> Tensor<Scalar>) {
-    return (noise(input, standardDeviation: standardDeviation), identity)
-}
-
 public extension Tensor where Scalar: TensorFlowFloatingPoint {
     init(channelwiseZeroMean shape: TensorShape){
         self.init(randomUniform: shape, lowerBound: Tensor<Scalar>(-1), upperBound: Tensor<Scalar>(1))
-        self = self - self.mean(alongAxes: [0, 1, 2])
-        self = self / self.l2Norm(alongAxes: [0, 1, 2])
+        self = weightNormalized()
     }
     
     @differentiable
@@ -52,20 +29,12 @@ public extension Tensor where Scalar: TensorFlowFloatingPoint {
         return centered / (centered.l2Norm(alongAxes: axes))
     }
     
-    @differentiable(wrt: self, vjp: vjpUniformNoise)
+    @differentiable(wrt: self)
     func uniformNoise(_ amplitude: Scalar = 0.1) -> Tensor {
         let noise = Tensor(randomUniform: shape,
                            lowerBound: Tensor<Scalar>(1 - amplitude),
                            upperBound: Tensor<Scalar>(1 + amplitude))
         return self * noise
-    }
-
-    func vjpUniformNoise(_ amplitude: Scalar = 0.1) -> (Tensor, (Tensor) -> Tensor) {
-        return (uniformNoise(amplitude), {v in
-            v * Tensor(randomUniform: v.shape,
-                       lowerBound: Tensor<Scalar>(1 - amplitude),
-                       upperBound: Tensor<Scalar>(1 + amplitude))
-        })
     }
 }
 
@@ -134,7 +103,7 @@ public struct WeightNormConv2D<Scalar: TensorFlowFloatingPoint>: Layer {
     
     @differentiable
     public func callAsFunction(_ input: Tensor<Scalar>) -> Tensor<Scalar>{
-        return input.convolved2DDF(withFilter: noise(filter * TensorFlow.exp(g)),
+        return input.convolved2DDF(withFilter: filter * TensorFlow.exp(g),
                                    strides: makeStrides(stride: stride, dataFormat: dataFormat),
                                    padding: .same,
                                    dataFormat: dataFormat)
@@ -163,7 +132,7 @@ public struct WeightNormDense<Scalar: TensorFlowFloatingPoint>: Layer {
 
     @differentiable
     public func callAsFunction(_ input: Tensor<Scalar>) -> Tensor<Scalar> {
-        return matmul(input + bias, noise(weight * TensorFlow.exp(g))) //weight.weightNormalized(g: g))
+        return matmul(input + bias, weight * TensorFlow.exp(g)) //weight.weightNormalized(g: g))
     }
     
     mutating func replaceParameters(_ newValue: TangentVector) {
@@ -207,7 +176,7 @@ struct PreactConv2D<Scalar: TensorFlowFloatingPoint>: Layer {
     @differentiable
     func callAsFunction(_ input: Tensor<Scalar>) -> Tensor<Scalar> {
         let tmp = max(input, bias1) //+ bias2
-        return tmp.convolved2DDF(withFilter: noise(filter * g),
+        return tmp.convolved2DDF(withFilter: filter * g,
                                  strides: makeStrides(stride: stride, dataFormat: dataFormat),
                                  padding: .same,
                                  dataFormat: dataFormat)
