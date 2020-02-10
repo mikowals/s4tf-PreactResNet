@@ -31,10 +31,15 @@ public extension Tensor where Scalar: TensorFlowFloatingPoint {
     
     @differentiable(wrt: self)
     func uniformNoise(_ amplitude: Scalar = 0.1) -> Tensor {
-        let noise = Tensor(randomUniform: shape,
+        switch Context.local.learningPhase {
+        case .training:
+            let noise = Tensor(randomUniform: shape,
                            lowerBound: Tensor<Scalar>(1 - amplitude),
                            upperBound: Tensor<Scalar>(1 + amplitude))
-        return self * noise
+            return self * noise
+        case .inference:
+            return self
+        }
     }
 }
 
