@@ -17,11 +17,18 @@ public extension Tensor where Scalar: TensorFlowFloatingPoint {
         return squared().sum()
     }
     
-    @differentiable(wrt: self)
+    @differentiable(wrt: self, vjp: _vjpL2Norm)
     func l2Norm(alongAxes axes: [Int]) -> Tensor<Scalar> {
-        return TensorFlow.sqrt(squared().sum(alongAxes: axes))
+        let axesTensor = Tensor<Int32>(axes.map(Int32.init))
+        return _Raw.euclideanNorm(self, reductionIndices: axesTensor, keepDims: true)
     }
     
+    //@derivative(of: l2Norm, wrt: self)
+    func _vjpL2Norm(alongAxes axes: [Int]) -> (
+        Tensor<Scalar>, (Tensor<Scalar>) -> Tensor<Scalar>) {
+            let value = l2Norm(alongAxes: axes)
+            return (value, {v in self / (value / v) })
+    }
     @differentiable(wrt: self)
     func weightNormalized() -> Tensor<Scalar> {
         let axes = Array<Int>(shape.indices.dropLast())

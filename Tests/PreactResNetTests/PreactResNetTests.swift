@@ -4,6 +4,23 @@ import TensorFlow
 @testable import PreactResNet
 
 final class PreactResNetTests: XCTestCase {
+    func testL2NormGrad() {
+        @differentiable(wrt: x)
+        func norm(_ x: Tensor<Float>, axes: [Int]) -> Tensor<Float> {
+            return TensorFlow.sqrt(x.squared().sum(alongAxes: axes))
+        }
+        
+        let x = Tensor<Float>(randomNormal: [9, 9, 32, 64])
+        let grad = gradient(at: x) { $0.l2Norm(alongAxes: [0, 1, 2]).sum() }
+        let targetGrad = gradient(at: x) { norm($0, axes: [0, 1, 2]).sum() }
+        XCTAssertTrue(grad.isAlmostEqual(to: targetGrad, tolerance: 1e-6))
+        
+        let y = Tensor<Float>(randomNormal: [256, 10])
+        let grad2 = gradient(at: y) {$0.l2Norm(alongAxes: [0]).sum() }
+        let targetGrad2 = gradient(at: y) { norm($0, axes: [0]).sum() }
+        XCTAssertTrue(grad2.isAlmostEqual(to: targetGrad2, tolerance: 1e-6))
+    }
+    
     func testGetSetParameters() {
         var model = PreactResNet<Float>(dataFormat: _Raw.DataFormat.nhwc, denseG: 0)
         var parameters = model.differentiableVectorView
@@ -80,6 +97,7 @@ final class PreactResNetTests: XCTestCase {
     }
 
     static var allTests = [
+        ("testL2NormGrad", testL2NormGrad),
         ("testGetSetParameters", testGetSetParameters),
         ("testWeightNormConv2D", testWeightNormConv2D),
         ("testWeightPreactConv2D", testWeightPreactConv2D),
