@@ -5,6 +5,9 @@ import PackageDescription
 
 let package = Package(
     name: "PreactResNet",
+    platforms: [
+      .macOS(.v10_13),
+    ],
     products: [
         // Products define the executables and libraries produced by a package, and make them visible to other packages.
         .library(
@@ -12,7 +15,7 @@ let package = Package(
             targets: ["PreactResNet"]),
     ],
     dependencies: [
-        .package(url: "https://github.com/mikowals/s4tf-LayersDataFormat.git", .revision("6c2525da80da67d62b535d5a359d395aa360b675")),
+        .package(url: "https://github.com/mikowals/s4tf-LayersDataFormat.git", .branch("master")),
     ],
     targets: [
         // Targets are the basic building blocks of a package. A target can define a module or a test suite.

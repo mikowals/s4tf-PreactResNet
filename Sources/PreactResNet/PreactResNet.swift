@@ -389,4 +389,10 @@ public struct PreactResNet<Scalar: TensorFlowFloatingPoint>: Layer {
         }
         dense1.weight = dense1.weight.weightNormalized()
     }
+    
+    func updateEMA(_ average: TangentVector) -> TangentVector {
+        let epsilon = Float(0.99)
+        let current = self.differentiableVectorView.scaled(by: 1 - epsilon)
+        return average.scaled(by: epsilon) + current
+    }
 }

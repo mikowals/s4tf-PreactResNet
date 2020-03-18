@@ -104,3 +104,4 @@ final class PreactResNetTests: XCTestCase {
         ("testWeightNormDense", testWeightNormDense),
     ]
 }
+
