@@ -95,6 +95,19 @@ final class PreactResNetTests: XCTestCase {
             "updated weights normalized"
         )
     }
+    
+    func testUpdateEMA() {
+        let model = PreactResNet<Float>(dataFormat: _Raw.DataFormat.nhwc, denseG: 0)
+        var average: PreactResNet<Float>.TangentVector = .zero
+        average = model.updateEMA(average)
+        let target = model.differentiableVectorView.scaled(by: 0.01)
+        XCTAssertTrue(average.dense1.weight.isAlmostEqual(
+            to: target.dense1.weight,
+            tolerance: 1e-8))
+        XCTAssertTrue(average.conv1.filter.isAlmostEqual(
+            to: target.conv1.filter,
+            tolerance: 1e-8))
+    }
 
     static var allTests = [
         ("testL2NormGrad", testL2NormGrad),
@@ -102,6 +115,7 @@ final class PreactResNetTests: XCTestCase {
         ("testWeightNormConv2D", testWeightNormConv2D),
         ("testWeightPreactConv2D", testWeightPreactConv2D),
         ("testWeightNormDense", testWeightNormDense),
+        ("testUpdateEMA", testUpdateEMA),
     ]
 }
 

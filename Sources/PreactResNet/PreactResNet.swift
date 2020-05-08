@@ -17,17 +17,17 @@ public extension Tensor where Scalar: TensorFlowFloatingPoint {
         return squared().sum()
     }
     
-    @differentiable(wrt: self, vjp: _vjpL2Norm)
+    @differentiable(wrt: self)
     func l2Norm(alongAxes axes: [Int]) -> Tensor<Scalar> {
         let axesTensor = Tensor<Int32>(axes.map(Int32.init))
         return _Raw.euclideanNorm(self, reductionIndices: axesTensor, keepDims: true)
     }
     
-    //@derivative(of: l2Norm, wrt: self)
+    @derivative(of: l2Norm, wrt: self)
     func _vjpL2Norm(alongAxes axes: [Int]) -> (
-        Tensor<Scalar>, (Tensor<Scalar>) -> Tensor<Scalar>) {
+        value: Tensor<Scalar>, pullback: (Tensor<Scalar>) -> Tensor<Scalar>) {
             let value = l2Norm(alongAxes: axes)
-            return (value, {v in self / (value / v) })
+            return (value: value, pullback: {v in self / (value / v) })
     }
     @differentiable(wrt: self)
     func weightNormalized() -> Tensor<Scalar> {
@@ -65,25 +65,22 @@ public struct ReparameterizedConv2D: Layer {
     public var filter, g: Tensor<Float>
     @noDerivative var stride: Int = 1
     @noDerivative var dataFormat: _Raw.DataFormat = .nhwc
-    @noDerivative var zmg: Float
     
     public init(filterShape: TensorShape,
          initialG: Float = 0.8,
          stride: Int = 1,
-         dataFormat: _Raw.DataFormat = .nhwc,
-         zmg: Float = 0.85) {
+         dataFormat: _Raw.DataFormat = .nhwc
+    ) {
         self.filter = Tensor<Float>(channelwiseZeroMean: filterShape)
         self.g = Tensor<Float>(repeating: TensorFlow.log(initialG), shape: [filterShape[3]])
         self.stride = stride
         self.dataFormat = dataFormat
-        self.zmg = zmg
     }
     
     @differentiable
     public func callAsFunction(_ input: Tensor<Float>) -> Tensor<Float> {
         return input.convolved2DDF(
-            withFilter: filter.withDerivative({ [zmg] (v: inout Tensor<Float>) in
-                v -= v.mean(alongAxes: [0, 1]) * zmg }) * TensorFlow.exp(g),
+            withFilter: filter * TensorFlow.exp(g),
             strides: makeStrides(stride: stride, dataFormat: dataFormat),
             padding: .same,
             dataFormat: dataFormat)
@@ -390,8 +387,7 @@ public struct PreactResNet<Scalar: TensorFlowFloatingPoint>: Layer {
         dense1.weight = dense1.weight.weightNormalized()
     }
     
-    func updateEMA(_ average: TangentVector) -> TangentVector {
-        let epsilon = Float(0.99)
+    func updateEMA(_ average: TangentVector, epsilon: Float = 0.99) -> TangentVector {
         let current = self.differentiableVectorView.scaled(by: 1 - epsilon)
         return average.scaled(by: epsilon) + current
     }
