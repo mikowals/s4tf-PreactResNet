@@ -19,7 +19,7 @@ public extension Tensor where Scalar: TensorFlowFloatingPoint {
     
     @differentiable(wrt: self)
     func l2Norm(alongAxes axes: [Int]) -> Tensor<Scalar> {
-        let axesTensor = Tensor<Int32>(axes.map(Int32.init))
+        let axesTensor = Tensor<Int32>(axes.map(Int32.init), on: self.device)
         return _Raw.euclideanNorm(self, reductionIndices: axesTensor, keepDims: true)
     }
     
